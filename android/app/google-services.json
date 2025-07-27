@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "479996813513",
+    "project_id": "sahayog-aaf08",
+    "storage_bucket": "sahayog-aaf08.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:479996813513:android:eb165b34cef849b453ed18",
+        "android_client_info": {
+          "package_name": "com.example.sahayog"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAqNwMzO4cYZIhh9axtlww5-VzgvKPNAuc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:479996813513:android:64686fd057802fe553ed18",
+        "android_client_info": {
+          "package_name": "com.example.sahayog_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAqNwMzO4cYZIhh9axtlww5-VzgvKPNAuc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
