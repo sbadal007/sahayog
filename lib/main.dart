@@ -3,6 +3,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'package:url_strategy/url_strategy.dart';
 import 'screens/welcome_screen.dart';
+import 'package:provider/provider.dart';
+import 'providers/user_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -10,7 +12,12 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  runApp(const SahayogApp());
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => UserProvider(),
+      child: const SahayogApp(),
+    ),
+  );
 }
 
 class SahayogApp extends StatelessWidget {

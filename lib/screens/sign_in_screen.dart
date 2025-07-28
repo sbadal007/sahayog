@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart';
+
 import 'home_screen.dart';
 import 'sign_up_screen.dart';
+import '../providers/user_provider.dart';
 
 class SignInScreen extends StatefulWidget {
   const SignInScreen({super.key});
@@ -59,12 +62,15 @@ class _SignInScreenState extends State<SignInScreen> {
         email = userEmail;
       }
 
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
+      final authResult = await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: email,
         password: _passwordController.text,
       );
 
       if (mounted) {
+        await Provider.of<UserProvider>(context, listen: false)
+            .loadUserFromFirestore(authResult.user!.uid);
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Signed in successfully!')),
         );

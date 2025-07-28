@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart';
+
+import '../providers/user_provider.dart';
 import 'home_screen.dart';
 
 class SignUpScreen extends StatefulWidget {
@@ -16,9 +19,16 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
+  String? _selectedRole;
 
   Future<void> _handleSignUp() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
+    if (_selectedRole == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a role')),
+      );
+      return;
+    }
 
     setState(() => _isLoading = true);
 
@@ -30,14 +40,21 @@ class _SignUpScreenState extends State<SignUpScreen> {
         password: _passwordController.text,
       );
 
+      final uid = userCredential.user!.uid;
+
       // Create user profile in Firestore
-      await FirebaseFirestore.instance.collection('users').doc(userCredential.user!.uid).set({
+      await FirebaseFirestore.instance.collection('users').doc(uid).set({
+        'uid': uid,
         'username': _usernameController.text.trim(),
         'email': _emailController.text.trim(),
+        'role': _selectedRole,
         'createdAt': Timestamp.now(),
       });
 
       if (mounted) {
+        await Provider.of<UserProvider>(context, listen: false)
+            .loadUserFromFirestore(userCredential.user!.uid);
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Account created successfully!')),
         );
@@ -105,6 +122,26 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 obscureText: true,
                 validator: (value) =>
                     value?.isEmpty ?? true ? 'Password is required' : null,
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                value: _selectedRole,
+                decoration: const InputDecoration(
+                  labelText: 'Select Role',
+                  border: OutlineInputBorder(),
+                ),
+                items: const [
+                  DropdownMenuItem(
+                    value: 'Requester',
+                    child: Text('Requester'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'Helper',
+                    child: Text('Helper'),
+                  ),
+                ],
+                onChanged: (value) => setState(() => _selectedRole = value),
+                validator: (value) => value == null ? 'Role is required' : null,
               ),
               const SizedBox(height: 24),
               ElevatedButton(

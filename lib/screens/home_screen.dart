@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../widgets/inbox_tab.dart';
 import '../widgets/create_request_tab.dart';
 import '../widgets/view_offers_tab.dart';
@@ -12,6 +14,36 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
+  String? _userRole;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchUserRole();
+  }
+
+  Future<void> _fetchUserRole() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        final doc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
+        if (mounted) {
+          setState(() {
+            _userRole = doc.data()?['role'] as String?;
+            _isLoading = false;
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -29,20 +61,24 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
       body: _buildTabContent(),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          border: Border(
-            top: BorderSide(color: Colors.grey.shade300),
-          ),
-        ),
-        child: Row(
-          children: [
-            _buildNavItem(0, Icons.inbox, 'Inbox'),
-            _buildNavItem(1, Icons.add_circle, 'Create Request'),
-            _buildNavItem(2, Icons.list, 'View Offers'),
-          ],
-        ),
-      ),
+      bottomNavigationBar: _userRole == null
+          ? null
+          : Container(
+              decoration: BoxDecoration(
+                border: Border(
+                  top: BorderSide(color: Colors.grey.shade300),
+                ),
+              ),
+              child: Row(
+                children: [
+                  _buildNavItem(0, Icons.inbox, 'Inbox'),
+                  if (_userRole == 'Requester')
+                    _buildNavItem(1, Icons.add_circle, 'Create Request'),
+                  if (_userRole == 'Helper')
+                    _buildNavItem(2, Icons.list, 'View Offers'),
+                ],
+              ),
+            ),
     );
   }
 
@@ -81,13 +117,21 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildTabContent() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
     switch (_selectedIndex) {
       case 0:
         return const InboxTab();
       case 1:
-        return const CreateRequestTab();
+        return _userRole == 'Requester'
+            ? const CreateRequestTab()
+            : const Center(child: Text('Only requesters can create requests'));
       case 2:
-        return const ViewOffersTab();
+        return _userRole == 'Helper'
+            ? const ViewOffersTab()
+            : const Center(child: Text('Only helpers can view requests'));
       default:
         return const SizedBox();
     }
