@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:geolocator/geolocator.dart';
 
 class CreateRequestTab extends StatefulWidget {
   const CreateRequestTab({super.key});
@@ -14,6 +17,86 @@ class _CreateRequestTabState extends State<CreateRequestTab> {
   final _priceController = TextEditingController();
   final _locationController = TextEditingController();
   DateTime? _preferredDate;
+  bool _isLoading = false;
+  Position? _currentPosition;
+
+  @override
+  void initState() {
+    super.initState();
+    _getCurrentLocation();
+  }
+
+  Future<void> _getCurrentLocation() async {
+    try {
+      Position position = await Geolocator.getCurrentPosition();
+      setState(() => _currentPosition = position);
+    } catch (e) {
+      debugPrint('Error getting location: $e');
+    }
+  }
+
+  Future<void> _submitRequest() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    if (_preferredDate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a preferred date')),
+      );
+      return;
+    }
+    if (_currentPosition == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Location is required. Please enable location services.')),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      // final user = FirebaseAuth.instance.currentUser;
+      // if (user == null) {
+      //   ScaffoldMessenger.of(context).showSnackBar(
+      //     const SnackBar(content: Text('Please sign in to create a request')),
+      //   );
+      //   return;
+      // }
+
+      await FirebaseFirestore.instance.collection('requests').add({
+        'userId': 'test-user', // temporary test user id
+        'title': _titleController.text,
+        'description': _descriptionController.text,
+        'price': double.parse(_priceController.text),
+        'location': _locationController.text,
+        'preferredDate': Timestamp.fromDate(_preferredDate!),
+        'createdAt': Timestamp.now(),
+        'latitude': _currentPosition!.latitude,
+        'longitude': _currentPosition!.longitude,
+        'status': 'open',
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Request created successfully!')),
+        );
+        _formKey.currentState?.reset();
+        _titleController.clear();
+        _descriptionController.clear();
+        _priceController.clear();
+        _locationController.clear();
+        setState(() => _preferredDate = null);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error creating request: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -87,9 +170,15 @@ class _CreateRequestTabState extends State<CreateRequestTab> {
             ),
             const SizedBox(height: 24),
             ElevatedButton.icon(
-              onPressed: _submitForm,
-              icon: const Icon(Icons.send),
-              label: const Text('Submit Request'),
+              onPressed: _isLoading ? null : _submitRequest,
+              icon: _isLoading 
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.send),
+              label: Text(_isLoading ? 'Submitting...' : 'Submit Request'),
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.all(16),
               ),
@@ -98,29 +187,6 @@ class _CreateRequestTabState extends State<CreateRequestTab> {
         ),
       ),
     );
-  }
-
-  void _submitForm() {
-    if (_formKey.currentState?.validate() ?? false) {
-      if (_preferredDate == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please select a preferred date')),
-        );
-        return;
-      }
-
-      // Here you would typically submit the form data to your backend
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Request submitted successfully!')),
-      );
-
-      // Clear form
-      _titleController.clear();
-      _descriptionController.clear();
-      _priceController.clear();
-      _locationController.clear();
-      setState(() => _preferredDate = null);
-    }
   }
 
   @override

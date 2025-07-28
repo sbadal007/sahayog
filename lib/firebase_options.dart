@@ -6,3 +6,54 @@
 ///
 /// Example:
 ///
+import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, kIsWeb, TargetPlatform;
+
+class DefaultFirebaseOptions {
+  static FirebaseOptions get currentPlatform {
+    if (kIsWeb) {
+      return web;
+    }
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.android:
+        return android;
+      case TargetPlatform.iOS:
+        return ios;
+      default:
+        throw UnsupportedError(
+          'DefaultFirebaseOptions are not supported for this platform.',
+        );
+    }
+  }
+
+  static const FirebaseOptions web = FirebaseOptions(
+    apiKey: 'AIzaSyChSyYjox31qbqhtYDVb5W7eDsQQAFNrok',
+    appId: '1:479996813513:web:1eede32eead6180953ed18',
+    messagingSenderId: '479996813513',
+    projectId: 'sahayog-aaf08',
+    authDomain: 'sahayog-aaf08.firebaseapp.com',
+    storageBucket: 'sahayog-aaf08.firebasestorage.app',
+    measurementId: 'G-8G2H4PX5J3',
+  );
+
+  static const FirebaseOptions android = FirebaseOptions(
+    apiKey: 'AIzaSyAqNwMzO4cYZIhh9axtlww5-VzgvKPNAuc',
+    appId: '1:479996813513:android:eb165b34cef849b453ed18',
+    messagingSenderId: '479996813513',
+    projectId: 'sahayog-aaf08',
+    storageBucket: 'sahayog-aaf08.firebasestorage.app',
+  );
+
+  static const FirebaseOptions ios = FirebaseOptions(
+    apiKey: 'AIzaSyBajxqx1wAWZqBHWm3nmZAX_vmUYMK2kYM',
+    appId: '1:479996813513:ios:bf351cf425861e8e53ed18',
+    messagingSenderId: '479996813513',
+    projectId: 'sahayog-aaf08',
+    storageBucket: 'sahayog-aaf08.firebasestorage.app',
+    iosClientId: '479996813513-svjlo3m89b51md3km1htco9pf2cungfh.apps.googleusercontent.com',
+    iosBundleId: 'com.example.sahayog',
+  );
+
+  // Include other platform configurations as needed...
+}
