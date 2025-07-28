@@ -35,6 +35,26 @@
     const serviceWorkerVersion = null;
   </script>
   <script src="flutter.js" defer></script>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-firestore.js"></script>
+  
+  <script>
+    // Your web app's Firebase configuration
+    const firebaseConfig = {
+      apiKey: "AIzaSyChSyYjox31qbqhtYDVb5W7eDsQQAFNrok",
+      authDomain: "sahayog-aaf08.firebaseapp.com",
+      projectId: "sahayog-aaf08",
+      storageBucket: "sahayog-aaf08.firebasestorage.app",
+      messagingSenderId: "479996813513",
+      appId: "1:479996813513:web:1eede32eead6180953ed18",
+      measurementId: "G-8G2H4PX5J3"
+    };
+
+    // Initialize Firebase
+    firebase.initializeApp(firebaseConfig);
+  </script>
 </head>
 <body>
   <script>

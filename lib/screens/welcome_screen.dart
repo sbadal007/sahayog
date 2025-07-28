@@ -1,6 +1,5 @@
 // filepath: lib/screens/welcome_screen.dart
 import 'package:flutter/material.dart';
-import 'home_screen.dart';
 import 'sign_in_screen.dart';
 import 'sign_up_screen.dart';
 
