@@ -1,66 +1,96 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 class ViewOffersTab extends StatelessWidget {
   const ViewOffersTab({super.key});
 
-  final List<Map<String, String>> _offers = const [
-    {
-      'title': 'Need help moving furniture',
-      'description': 'Need assistance moving heavy furniture from ground floor to 3rd floor',
-      'price': 'Rs. 1000',
-      'distance': '1.2km away'
-    },
-    {
-      'title': 'Hospital Visit Companion',
-      'description': 'Looking for someone to accompany elderly father for hospital checkup',
-      'price': 'Rs. 800',
-      'distance': '0.5km away'
-    },
-    {
-      'title': 'Grocery Shopping Assistant',
-      'description': 'Need help with weekly grocery shopping for elderly couple',
-      'price': 'Rs. 500',
-      'distance': '2.1km away'
-    },
-  ];
-
   @override
   Widget build(BuildContext context) {
-    return ListView.builder(
-      itemCount: _offers.length,
-      padding: const EdgeInsets.all(8),
-      itemBuilder: (context, index) {
-        final offer = _offers[index];
-        return Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  offer['title']!,
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 8),
-                Text(offer['description']!),
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('requests')
+          .orderBy('createdAt', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (snapshot.hasError) {
+          return const Center(child: Text('Something went wrong.'));
+        }
+
+        final docs = snapshot.data?.docs ?? [];
+
+        if (docs.isEmpty) {
+          return const Center(child: Text('No requests found.'));
+        }
+
+        return ListView.builder(
+          itemCount: docs.length,
+          itemBuilder: (context, index) {
+            final data = docs[index].data() as Map<String, dynamic>;
+            final title = data['title'] ?? 'No Title';
+            final description = data['description'] ?? 'No Description';
+            final price = data['price']?.toString() ?? 'N/A';
+            final timestamp = data['createdAt'] as Timestamp?;
+            // TODO: In future, calculate actual distance using user's current location
+            // and the request's latitude/longitude coordinates
+            final dummyDistance = '${(index + 1) * 0.5}'; // Dummy distance for demonstration
+            
+            final formattedDate = timestamp != null
+                ? DateFormat.yMd().add_jm().format(timestamp.toDate())
+                : 'No Date';
+
+            return Card(
+              margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              child: Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('${offer['price']} • ${offer['distance']}'),
-                    ElevatedButton(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Opening chat...')),
-                        );
-                      },
-                      child: const Text('Chat Now'),
+                    Text(title, 
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16
+                      )
+                    ),
+                    const SizedBox(height: 8),
+                    Text(description),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Rs. $price',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.green
+                          ),
+                        ),
+                        Text(
+                          '~${dummyDistance}km away',
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: 12
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      formattedDate, 
+                      style: const TextStyle(
+                        fontSize: 12, 
+                        color: Colors.grey
+                      )
                     ),
                   ],
                 ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );
