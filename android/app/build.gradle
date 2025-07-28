@@ -1,0 +1,17 @@
+```groovy
+package com.example.sahayog
+
+import io.flutter.embedding.android.FlutterActivity
+
+class MainActivity : FlutterActivity()
+
+android {
+    // ...existing code...
+    defaultConfig {
+        // ...existing code...
+        minSdkVersion 20
+        targetSdkVersion 33
+        // ...existing code...
+    }
+}
+```

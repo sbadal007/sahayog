@@ -45,5 +45,9 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Sahayog needs access to location to show nearby helpers and requests.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>Sahayog needs access to location to show nearby helpers and requests.</string>
 </dict>
 </plist>
