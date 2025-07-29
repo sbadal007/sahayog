@@ -5,6 +5,7 @@ import '../widgets/create_request_tab.dart';
 import '../widgets/view_offers_tab.dart';
 import '../widgets/helper_inbox.dart';
 import '../widgets/requester_inbox.dart';
+import 'profile_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -60,6 +61,17 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ],
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.person),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const ProfileScreen()),
+              );
+            },
+          ),
+        ],
       ),
       body: _buildTabContent(),
       bottomNavigationBar: _userRole == null

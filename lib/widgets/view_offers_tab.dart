@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../services/notification_service.dart';
+import '../widgets/user_status_widget.dart';
 
 class ViewOffersTab extends StatelessWidget {
   const ViewOffersTab({super.key});
@@ -186,13 +187,27 @@ class ViewOffersTab extends StatelessWidget {
                           ],
                         ),
                         const SizedBox(height: 4),
-                        Text(
-                          'By: $requesterUsername',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[600],
-                            fontStyle: FontStyle.italic,
-                          ),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'By: $requesterUsername',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                            ),
+                            UserStatusWidget(
+                              userId: requesterId,
+                              textStyle: TextStyle(
+                                fontSize: 11,
+                                color: Colors.grey[500],
+                              ),
+                              showDot: true,
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 8),
                         Text(description),
