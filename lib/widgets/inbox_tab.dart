@@ -1,47 +1,48 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'helper_inbox.dart';
+import 'requester_inbox.dart';
 
 class InboxTab extends StatelessWidget {
   const InboxTab({super.key});
 
-  final List<Map<String, String>> _messages = const [
-    {
-      'sender': 'John Doe',
-      'message': 'I can help you with moving furniture',
-      'time': '10 mins ago',
-      'initials': 'JD',
-    },
-    {
-      'sender': 'Sarah Wilson',
-      'message': 'Available for evening hospital visit assistance',
-      'time': '1 hour ago',
-      'initials': 'SW',
-    },
-    {
-      'sender': 'Mike Brown',
-      'message': 'Can provide transportation tomorrow morning',
-      'time': '2 hours ago',
-      'initials': 'MB',
-    },
-  ];
-
   @override
   Widget build(BuildContext context) {
-    return ListView.builder(
-      itemCount: _messages.length,
-      padding: const EdgeInsets.all(8),
-      itemBuilder: (context, index) {
-        final message = _messages[index];
-        return Card(
-          child: ListTile(
-            leading: CircleAvatar(
-              child: Text(message['initials']!),
-            ),
-            title: Text(message['sender']!),
-            subtitle: Text(message['message']!),
-            trailing: Text(message['time']!),
-            onTap: () {},
-          ),
-        );
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      return const Center(child: Text('Please login to view messages'));
+    }
+
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (snapshot.hasError) {
+          debugPrint('Error loading user data: ${snapshot.error}');
+          return const Center(child: Text('Error loading inbox'));
+        }
+
+        if (!snapshot.hasData || !snapshot.data!.exists) {
+          return const Center(child: Text('User profile not found'));
+        }
+
+        final userData = snapshot.data!.data() as Map<String, dynamic>?;
+        final userRole = userData?['role'] as String?;
+
+        if (userRole == 'Helper') {
+          return HelperInbox(userId: user.uid);
+        } else if (userRole == 'Requester') {
+          return RequesterInbox(userId: user.uid);
+        }
+
+        return const Center(child: Text('Invalid user role'));
       },
     );
   }
