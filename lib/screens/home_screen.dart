@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../widgets/inbox_tab.dart';
 import '../widgets/create_request_tab.dart';
 import '../widgets/view_offers_tab.dart';
+import '../widgets/helper_inbox.dart';
+import '../widgets/requester_inbox.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -121,9 +122,19 @@ class _HomeScreenState extends State<HomeScreen> {
       return const Center(child: CircularProgressIndicator());
     }
 
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      return const Center(child: Text('Please login'));
+    }
+
     switch (_selectedIndex) {
       case 0:
-        return const InboxTab();
+        if (_userRole == null) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        return _userRole == 'Helper'
+            ? HelperInbox(userId: user.uid)
+            : RequesterInbox(userId: user.uid);
       case 1:
         return _userRole == 'Requester'
             ? const CreateRequestTab()

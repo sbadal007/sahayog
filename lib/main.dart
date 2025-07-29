@@ -5,13 +5,12 @@ import 'package:url_strategy/url_strategy.dart';
 import 'screens/welcome_screen.dart';
 import 'package:provider/provider.dart';
 import 'providers/user_provider.dart';
+import 'services/firebase_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   setPathUrlStrategy();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await FirebaseService.initializeApp();
   runApp(
     ChangeNotifierProvider(
       create: (_) => UserProvider(),
