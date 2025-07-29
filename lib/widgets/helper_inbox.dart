@@ -47,7 +47,7 @@ class HelperInbox extends StatelessWidget {
                     onPressed: () async {
                       await FirebaseAuth.instance.signOut();
                       if (context.mounted) {
-                        Navigator.of(context).pushNamedAndRemoveUntil('/welcome', (route) => false);
+                        Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
                       }
                     },
                     child: const Text('Sign Out'),
