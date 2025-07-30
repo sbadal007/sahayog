@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../widgets/user_status_widget.dart';
 
 class RequesterInbox extends StatefulWidget {
   final String? userId;
@@ -92,16 +93,6 @@ class _RequesterInboxState extends State<RequesterInbox> with SingleTickerProvid
         title: const Text('My Requests'),
         backgroundColor: Colors.blue,
         foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            icon: Icon(_showDebugInfo ? Icons.visibility_off : Icons.bug_report),
-            onPressed: () {
-              setState(() {
-                _showDebugInfo = !_showDebugInfo;
-              });
-            },
-          ),
-        ],
         bottom: TabBar(
           controller: _tabController,
           labelColor: Colors.white,
@@ -351,6 +342,7 @@ class _RequesterInboxState extends State<RequesterInbox> with SingleTickerProvid
   Widget _buildOfferCard(String offerId, Map<String, dynamic> offer) {
     final status = offer['status'] as String? ?? 'pending';
     final helperName = offer['helperName'] as String? ?? 'Anonymous Helper';
+    final helperId = offer['helperId'] as String? ?? '';
     final createdAt = (offer['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now();
     final requestId = offer['requestId'] as String? ?? '';
 
@@ -374,6 +366,17 @@ class _RequesterInboxState extends State<RequesterInbox> with SingleTickerProvid
                     children: [
                       Text(helperName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                       Text('Interested in helping', style: TextStyle(color: Colors.grey[600])),
+                      if (helperId.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        UserStatusWidget(
+                          userId: helperId,
+                          textStyle: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[500],
+                          ),
+                          showDot: true,
+                        ),
+                      ],
                     ],
                   ),
                 ),

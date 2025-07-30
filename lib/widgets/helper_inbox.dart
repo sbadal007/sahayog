@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class HelperInbox extends StatelessWidget {
   final String userId;
@@ -23,6 +24,39 @@ class HelperInbox extends StatelessWidget {
 
         if (snapshot.hasError) {
           debugPrint('HelperInbox error: ${snapshot.error}');
+          
+          // Handle specific permission errors
+          if (snapshot.error.toString().contains('permission-denied')) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.lock, size: 64, color: Colors.orange),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Access Restricted',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'You don\'t have permission to view offers.\nPlease sign out and sign in again.',
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () async {
+                      await FirebaseAuth.instance.signOut();
+                      if (context.mounted) {
+                        Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+                      }
+                    },
+                    child: const Text('Sign Out'),
+                  ),
+                ],
+              ),
+            );
+          }
+          
           return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -31,6 +65,12 @@ class HelperInbox extends StatelessWidget {
                 const SizedBox(height: 16),
                 const Text('Error loading offers'),
                 const SizedBox(height: 8),
+                Text(
+                  snapshot.error.toString(),
+                  style: const TextStyle(fontSize: 12),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
                 ElevatedButton(
                   onPressed: () {
                     // Trigger rebuild
@@ -55,7 +95,21 @@ class HelperInbox extends StatelessWidget {
         });
 
         if (offers.isEmpty) {
-          return const Center(child: Text('No offers made yet'));
+          return const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.inbox_outlined, size: 80, color: Colors.grey),
+                SizedBox(height: 16),
+                Text('No offers made yet', style: TextStyle(fontSize: 18, color: Colors.grey)),
+                SizedBox(height: 8),
+                Text(
+                  'Start browsing requests to make your first offer!',
+                  style: TextStyle(fontSize: 14, color: Colors.grey),
+                ),
+              ],
+            ),
+          );
         }
 
         return ListView.builder(

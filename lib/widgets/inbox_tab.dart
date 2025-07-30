@@ -42,7 +42,24 @@ class InboxTab extends StatelessWidget {
           return RequesterInbox(userId: user.uid);
         }
 
-        return const Center(child: Text('Invalid user role'));
+        return Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text('Invalid or missing user role'),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () async {
+                  await FirebaseAuth.instance.signOut();
+                  if (context.mounted) {
+                    Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+                  }
+                },
+                child: const Text('Sign Out'),
+              ),
+            ],
+          ),
+        );
       },
     );
   }
