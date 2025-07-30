@@ -111,12 +111,27 @@ class _SignInScreenState extends State<SignInScreen> {
             'createdAt': FieldValue.serverTimestamp(),
             'isVerified': false,
             'profileImageUrl': null,
+            'updatedAt': FieldValue.serverTimestamp(),
           }, SetOptions(merge: true));
+        } else {
+          // Update online status for existing user
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(authResult.user!.uid)
+              .update({
+            'isOnline': true,
+            'lastSeen': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
         }
 
-        // Load user data from Firestore
-        await Provider.of<UserProvider>(context, listen: false)
-            .loadUserFromFirestore(authResult.user!.uid);
+        // Load user data from Firestore with error handling
+        try {
+          await Provider.of<UserProvider>(context, listen: false)
+              .loadUserFromFirestore(authResult.user!.uid);
+        } catch (e) {
+          debugPrint('SignInScreen: Error loading user provider: $e');
+        }
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
