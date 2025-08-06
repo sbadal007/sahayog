@@ -14,8 +14,277 @@ class ViewOffersTab extends StatefulWidget {
 
 class _ViewOffersTabState extends State<ViewOffersTab> {
   bool _isRetrying = false;
-  String? _lastError;
   final Map<String, bool> _loadingStates = {}; // Track loading for individual operations
+
+  Future<void> _refreshRequests() async {
+    setState(() {
+      _isRetrying = true;
+    });
+    
+    try {
+      // Force refresh by triggering a rebuild
+      await Future.delayed(const Duration(milliseconds: 500));
+    } catch (e) {
+      debugPrint('ViewOffersTab: Error refreshing requests: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isRetrying = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _showRequestDetails(BuildContext context, DocumentSnapshot doc) async {
+    final data = doc.data() as Map<String, dynamic>? ?? {};
+    final title = data['title']?.toString() ?? 'Untitled Request';
+    final description = data['description']?.toString() ?? 'No description provided';
+    final price = data['price']?.toString() ?? 'Not specified';
+    final location = data['location']?.toString() ?? 'Location not specified';
+    final requesterId = data['userId']?.toString() ?? '';
+    final requesterUsername = data['username']?.toString() ?? 'Anonymous User';
+    final timestamp = data['createdAt'] as Timestamp?;
+    
+    // Get all offers for this request to count interested helpers
+    final offersSnapshot = await FirebaseFirestore.instance
+        .collection('offers')
+        .where('requestId', isEqualTo: doc.id)
+        .get();
+    
+    final interestedCount = offersSnapshot.docs.length;
+    final currentUser = FirebaseAuth.instance.currentUser;
+    final hasCurrentUserOffer = offersSnapshot.docs.any(
+      (offer) => (offer.data()['helperId'] as String?) == currentUser?.uid
+    );
+    
+    final formattedDate = timestamp != null
+        ? DateFormat.yMd().add_jm().format(timestamp.toDate())
+        : 'Date unknown';
+
+    if (!context.mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.75,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          children: [
+            // Handle bar
+            Container(
+              margin: const EdgeInsets.only(top: 12),
+              height: 4,
+              width: 40,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Header
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            title,
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(Icons.close),
+                        ),
+                      ],
+                    ),
+                    
+                    const SizedBox(height: 8),
+                    
+                    // Requester info
+                    Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 16,
+                          backgroundColor: Colors.blue,
+                          child: Text(
+                            requesterUsername.isNotEmpty ? requesterUsername[0].toUpperCase() : '?',
+                            style: const TextStyle(color: Colors.white, fontSize: 12),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                requesterUsername,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w500,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              if (requesterId.isNotEmpty)
+                                UserStatusWidget(
+                                  userId: requesterId,
+                                  textStyle: const TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey,
+                                  ),
+                                  showDot: true,
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    
+                    const SizedBox(height: 16),
+                    
+                    // Interest indicator
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: interestedCount > 0 ? Colors.orange.shade50 : Colors.green.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: interestedCount > 0 ? Colors.orange.shade200 : Colors.green.shade200,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            interestedCount > 0 ? Icons.people : Icons.person_add,
+                            color: interestedCount > 0 ? Colors.orange.shade600 : Colors.green.shade600,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              interestedCount == 0
+                                  ? 'Be the first to show interest!'
+                                  : interestedCount == 1
+                                      ? '1 helper is interested'
+                                      : '$interestedCount helpers are interested',
+                              style: TextStyle(
+                                color: interestedCount > 0 ? Colors.orange.shade700 : Colors.green.shade700,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    
+                    const SizedBox(height: 16),
+                    
+                    // Description
+                    const Text(
+                      'Description',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        child: Text(
+                          description,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            height: 1.5,
+                          ),
+                        ),
+                      ),
+                    ),
+                    
+                    const SizedBox(height: 16),
+                    
+                    // Details
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildDetailRow(Icons.location_on, 'Location', location),
+                        const SizedBox(height: 8),
+                        _buildDetailRow(Icons.attach_money, 'Price', 'Rs. $price'),
+                        const SizedBox(height: 8),
+                        _buildDetailRow(Icons.access_time, 'Posted', formattedDate),
+                      ],
+                    ),
+                    
+                    const SizedBox(height: 20),
+                    
+                    // Action button
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: hasCurrentUserOffer
+                            ? null
+                            : () {
+                                Navigator.pop(context);
+                                _makeOffer(context, doc.id, requesterId);
+                              },
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          backgroundColor: hasCurrentUserOffer ? Colors.grey : Colors.blue,
+                        ),
+                        child: Text(
+                          hasCurrentUserOffer
+                              ? 'Already Interested'
+                              : 'Show Interest',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(IconData icon, String label, String value) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: Colors.grey[600]),
+        const SizedBox(width: 8),
+        Text(
+          '$label: ',
+          style: TextStyle(
+            fontWeight: FontWeight.w500,
+            color: Colors.grey[700],
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            style: const TextStyle(
+              color: Colors.black87,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 
   Future<String> _getHelperUsername(String helperId) async {
     try {
@@ -366,7 +635,6 @@ class _ViewOffersTabState extends State<ViewOffersTab> {
                 onPressed: _isRetrying ? null : () {
                   setState(() {
                     _isRetrying = true;
-                    _lastError = null;
                   });
                   onRetry();
                 },
@@ -661,12 +929,14 @@ class _ViewOffersTabState extends State<ViewOffersTab> {
 
     return Stack(
       children: [
-        StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance
-              .collection('requests')
-              .where('status', isEqualTo: 'open')
-              .snapshots(),
-          builder: (context, snapshot) {
+        RefreshIndicator(
+          onRefresh: _refreshRequests,
+          child: StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('requests')
+                .where('status', isEqualTo: 'open')
+                .snapshots(),
+            builder: (context, snapshot) {
             // Enhanced loading state
             if (snapshot.connectionState == ConnectionState.waiting) {
               return _buildLoadingState();
@@ -797,15 +1067,17 @@ class _ViewOffersTabState extends State<ViewOffersTab> {
 
                     final isLoading = _loadingStates[doc.id] == true;
 
-                    return Card(
-                      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      child: Padding(
-                        padding: const EdgeInsets.all(12.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
+                    return GestureDetector(
+                      onTap: () => _showRequestDetails(context, doc),
+                      child: Card(
+                        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
                                 Expanded(
                                   child: Text(
                                     title, 
@@ -914,14 +1186,16 @@ class _ViewOffersTabState extends State<ViewOffersTab> {
                             ),
                           ],
                         ),
-                      ));
+                      ),
+                    )); // Close GestureDetector
                   },
-                );
+                ); // Close StreamBuilder
               },
-            );
+            ); // Close ListView.builder
           },
-        ),
-        // Enhanced bottom panel showing active offers
+        ), // Close main StreamBuilder
+        ), // Close RefreshIndicator
+        // Enhanced bottom panel showing active offers    
         Positioned(
           left: 0,
           right: 0,
