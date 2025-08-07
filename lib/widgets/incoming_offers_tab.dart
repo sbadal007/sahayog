@@ -65,22 +65,123 @@ class IncomingOffersTab extends StatelessWidget {
             final offerId = offers[index].id;
             
             return Card(
-              child: ListTile(
-                leading: CircleAvatar(
-                  child: Text(offer['helperName']?[0] ?? '?'),
-                ),
-                title: Text(offer['helperName'] ?? 'Anonymous'),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    TextButton(
-                      onPressed: () => _handleOffer(offerId, 'accept'),
-                      child: const Text('Accept'),
+                    Row(
+                      children: [
+                        CircleAvatar(
+                          child: Text(offer['helperName']?[0] ?? '?'),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            offer['helperName'] ?? 'Anonymous',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                    TextButton(
-                      onPressed: () => _handleOffer(offerId, 'reject'),
-                      style: TextButton.styleFrom(foregroundColor: Colors.red),
-                      child: const Text('Reject'),
+                    
+                    // Show alternative price if proposed
+                    if (offer['alternativePrice'] != null) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.orange.shade200),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.price_change, size: 18, color: Colors.orange.shade700),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Proposed Price: Rs. ${(offer['alternativePrice'] as num).toStringAsFixed(0)}',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w500,
+                                color: Colors.orange.shade800,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    
+                    // Show custom message if provided
+                    if (offer['customMessage'] != null && 
+                        (offer['customMessage'] as String).isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.blue.shade200),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(Icons.message, size: 18, color: Colors.blue.shade700),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Personal Message:',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.blue.shade800,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              offer['customMessage'] as String,
+                              style: TextStyle(
+                                color: Colors.blue.shade700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    
+                    const SizedBox(height: 16),
+                    
+                    // Action buttons
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () => _handleOffer(offerId, 'accept'),
+                            icon: const Icon(Icons.check),
+                            label: const Text('Accept'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.green,
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () => _handleOffer(offerId, 'reject'),
+                            icon: const Icon(Icons.close),
+                            label: const Text('Reject'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.red,
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),

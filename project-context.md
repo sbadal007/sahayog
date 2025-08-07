@@ -21,6 +21,11 @@ sahayog/
 ├── lib/
 │   ├── main.dart                    # App entry point
 │   ├── firebase_options.dart        # Firebase configuration
+│   ├── models/                      # Data models
+│   │   ├── user.dart               # User data model
+│   │   ├── request.dart            # Request data model with pricing
+│   │   ├── message.dart            # Message data model
+│   │   └── offer.dart              # Enhanced offer model with custom terms
 │   ├── providers/                   # State management
 │   │   └── user_provider.dart       # User data provider
 │   ├── screens/                     # UI screens
@@ -36,6 +41,7 @@ sahayog/
 │   │   ├── helper_inbox.dart        # Helper's dashboard
 │   │   ├── incoming_offers_tab.dart # Offer management
 │   │   ├── inbox_tab.dart          # Role-based inbox router
+│   │   ├── offer_dialog.dart       # Interactive offer creation dialog
 │   │   ├── user_avatar.dart        # Profile picture component
 │   │   └── user_status_widget.dart # Online/offline indicator
 │   └── services/                   # Business logic & utilities
@@ -60,9 +66,11 @@ sahayog/
 - **UserAvatar**: Cached network image component with retry logic and error handling
 - **UserStatusWidget**: Real-time online/offline status indicator
 - **CreateRequestTab**: Form for creating help requests with location services
-- **ViewOffersTab**: Helper interface to browse and respond to requests
-- **RequesterInbox**: Dashboard for managing requests and incoming offers
-- **HelperInbox**: Dashboard for tracking sent offers and status updates
+- **ViewOffersTab**: Helper interface to browse and respond to requests with enhanced offer dialog
+- **OfferDialog**: Interactive dialog for creating offers with custom messages and alternative pricing
+- **RequesterInbox**: Dashboard for managing requests and incoming offers with custom terms display
+- **HelperInbox**: Dashboard for tracking sent offers and status updates with offer details
+- **IncomingOffersTab**: Enhanced offer management with custom message and pricing display
 
 ### State Management
 - **UserProvider**: Centralized user state with change detection to prevent unnecessary rebuilds
@@ -81,6 +89,8 @@ sahayog/
 - **Location Services**: GPS-based location capture for requests
 - **Real-time Updates**: Firestore snapshots for live data synchronization
 - **Error Handling**: Comprehensive error management with user-friendly messages
+- **Enhanced Offer Management**: Custom messaging and alternative pricing in offers
+- **Interactive Offer Creation**: Guided dialog system for personalized offers
 
 ## 🔌 APIs or Data Sources
 
@@ -136,23 +146,62 @@ sahayog/
 - **Services**: `[name]_service.dart`
 - **Providers**: `[name]_provider.dart`
 
+### Models & Data Structures
+- **Offer Model**: Complete offer data structure with custom messaging and pricing
+- **Request Model**: Enhanced with price field for better offer comparison
+- **Message Model**: Basic messaging infrastructure for future chat system
+- **User Model**: Comprehensive user profile with role-based features
+
 ### Code Patterns
 - **State Management**: Provider pattern with ChangeNotifier
 - **Async Operations**: Future-based with proper error handling
 - **UI Structure**: StatefulWidget for complex screens, StatelessWidget for simple displays
 - **Data Flow**: Unidirectional data flow with provider updates triggering UI rebuilds
+- **Dialog-based Interactions**: Modal dialogs for complex user inputs
+- **Conditional UI Rendering**: Dynamic content based on data availability
 
 ### Database Schema
 - **Users**: `uid`, `username`, `email`, `role`, `profileImageUrl`, `isOnline`, `lastSeen`
 - **Requests**: `userId`, `title`, `description`, `price`, `location`, `status`, `createdAt`
-- **Offers**: `requestId`, `helperId`, `helperName`, `requesterId`, `status`, `createdAt`
+- **Offers**: `requestId`, `helperId`, `helperName`, `requesterId`, `status`, `createdAt`, `customMessage`, `alternativePrice`
+- **Messages**: `senderId`, `receiverId`, `content`, `timestamp`
+- **Notifications**: `userId`, `title`, `message`, `type`, `createdAt`, `isRead`
 
-## 🚧 Work In Progress / TODOs
+## � Recent Updates & Features
+
+### Enhanced Offer Management System (August 2025)
+- **Custom Messages**: Helpers can now add personalized messages with their offers
+  - 500 character limit with validation
+  - Helps build trust and communication
+  - Displayed across all offer interfaces
+- **Alternative Pricing**: Option to propose different prices than requested
+  - Input validation for positive numbers only
+  - Clear visual indicators with orange-themed containers
+  - Original vs. proposed price comparison
+- **Improved UI/UX**: 
+  - Interactive offer creation dialog
+  - Color-coded display (blue for messages, orange for pricing)
+  - Enhanced notification system with custom terms mention
+  - Responsive design across all screen sizes
+
+### Technical Implementation
+- **New Models**: Enhanced Offer model with optional fields
+- **Dialog System**: Reusable offer creation dialog component  
+- **Database Updates**: Additional fields in Firestore offers collection
+- **Backward Compatibility**: Existing offers continue to work seamlessly
+
+## �🚧 Work In Progress / TODOs
 
 ### Immediate Priority
 - **Image Loading Issues**: Firebase Storage CORS problems causing "statusCode: 0" errors
 - **Performance Optimization**: UserProvider excessive notifications resolved but monitoring needed
 - **Cloud Functions**: Proxy service for image downloads partially implemented
+
+### Recently Completed ✅
+- **Enhanced Offer Management**: Custom messages and alternative pricing in offers
+- **Interactive Offer Dialog**: User-friendly interface for creating personalized offers
+- **Improved Offer Display**: Visual indicators for custom terms across all interfaces
+- **Data Model Updates**: Enhanced Offer and Request models with new fields
 
 ### Planned Features
 - **Chat System**: Direct messaging between requesters and helpers
@@ -178,3 +227,4 @@ sahayog/
 
 *Last Updated: August 06, 2025*
 *Project Status: Active Development*
+*Latest Feature: Enhanced Offer Management with Custom Messages & Alternative Pricing*

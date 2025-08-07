@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../services/notification_service.dart';
+import '../widgets/offer_dialog.dart';
 import '../widgets/user_status_widget.dart';
 
 class ViewOffersTab extends StatefulWidget {
@@ -327,52 +328,36 @@ class _ViewOffersTabState extends State<ViewOffersTab> {
   }
 
   Future<void> _makeOffer(BuildContext context, String requestId, String requesterId) async {
-    // Show loading state for this specific offer
-    setState(() {
-      _loadingStates[requestId] = true;
-    });
+    final user = FirebaseAuth.instance.currentUser;
+    
+    // Enhanced authentication check
+    if (user == null) {
+      _showErrorSnackBar(
+        context, 
+        'Authentication required', 
+        'Please sign in to make an offer', 
+        action: SnackBarAction(
+          label: 'Sign In',
+          onPressed: () {
+            // Navigate to sign in screen
+            debugPrint('Navigate to sign in');
+          },
+        ),
+      );
+      return;
+    }
+
+    // Validate input parameters
+    if (requestId.isEmpty || requesterId.isEmpty) {
+      _showErrorSnackBar(context, 'Invalid request', 'Unable to process this request. Please try again.');
+      return;
+    }
 
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      
-      // Enhanced authentication check
-      if (user == null) {
-        _showErrorSnackBar(
-          context, 
-          'Authentication required', 
-          'Please sign in to make an offer', 
-          action: SnackBarAction(
-            label: 'Sign In',
-            onPressed: () {
-              // Navigate to sign in screen
-              debugPrint('Navigate to sign in');
-            },
-          ),
-        );
-        return;
-      }
-
-      final helperId = user.uid;
-      
-      debugPrint('ViewOffersTab: Making offer with helperId: $helperId');
-
-      // Validate input parameters
-      if (requestId.isEmpty || requesterId.isEmpty) {
-        _showErrorSnackBar(context, 'Invalid request', 'Unable to process this request. Please try again.');
-        return;
-      }
-
-      // Show progress indicator
-      if (!mounted) return;
-      
-      // Fetch helper username with error handling
-      final helperName = await _getHelperUsername(helperId);
-      debugPrint('ViewOffersTab: Helper username: $helperName');
-
-      // Check for existing active offer with timeout
+      // Check for existing active offer first
       final existingOffers = await FirebaseFirestore.instance
           .collection('offers')
-          .where('helperId', isEqualTo: helperId)
+          .where('helperId', isEqualTo: user.uid)
           .where('requestId', isEqualTo: requestId)
           .where('status', whereIn: ['pending', 'accepted'])
           .get()
@@ -386,24 +371,7 @@ class _ViewOffersTabState extends State<ViewOffersTab> {
         return;
       }
 
-      debugPrint('ViewOffersTab: Creating offer with helperId: $helperId, requesterId: $requesterId');
-
-      // Create new offer with validation
-      final offerRef = await FirebaseFirestore.instance.collection('offers').add({
-        'requestId': requestId,
-        'helperId': helperId,
-        'helperName': helperName,
-        'requesterId': requesterId,
-        'status': 'pending',
-        'createdAt': FieldValue.serverTimestamp(),
-      }).timeout(
-        const Duration(seconds: 15),
-        onTimeout: () => throw Exception('Failed to create offer. Please try again.'),
-      );
-
-      debugPrint('ViewOffersTab: Offer created with ID: ${offerRef.id}');
-
-      // Fetch request details with error handling
+      // Fetch request details to get the title and price for the dialog
       final requestDoc = await FirebaseFirestore.instance
           .collection('requests')
           .doc(requestId)
@@ -411,15 +379,115 @@ class _ViewOffersTabState extends State<ViewOffersTab> {
           .timeout(const Duration(seconds: 10));
       
       final requestData = requestDoc.data();
-      final requestTitle = requestData?['title'] ?? 'a request';
-      final requesterUsername = requestData?['username'] ?? 'Unknown User';
+      final requestTitle = requestData?['title'] ?? 'Unknown Request';
+      final originalPrice = (requestData?['price'] as num?)?.toDouble() ?? 0.0;
+
+      if (!context.mounted) return;
+
+      // Show the offer dialog
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext dialogContext) {
+          return OfferDialog(
+            requestTitle: requestTitle,
+            originalPrice: originalPrice,
+            onCancel: () {
+              Navigator.of(dialogContext).pop();
+            },
+            onSubmit: (String? customMessage, double? alternativePrice) async {
+              Navigator.of(dialogContext).pop();
+              await _createOfferWithDetails(
+                context,
+                requestId,
+                requesterId,
+                requestTitle,
+                customMessage,
+                alternativePrice,
+              );
+            },
+          );
+        },
+      );
+    } catch (e) {
+      debugPrint('ViewOffersTab: Error in _makeOffer: $e');
+      _showErrorSnackBar(context, 'Error', 'Failed to load request details. Please try again.');
+    }
+  }
+
+  Future<void> _createOfferWithDetails(
+    BuildContext context,
+    String requestId,
+    String requesterId,
+    String requestTitle,
+    String? customMessage,
+    double? alternativePrice,
+  ) async {
+    // Show loading state for this specific offer
+    setState(() {
+      _loadingStates[requestId] = true;
+    });
+
+    try {
+      final user = FirebaseAuth.instance.currentUser!;
+      final helperId = user.uid;
+      
+      debugPrint('ViewOffersTab: Creating offer with helperId: $helperId, requesterId: $requesterId');
+
+      // Fetch helper username with error handling
+      final helperName = await _getHelperUsername(helperId);
+      debugPrint('ViewOffersTab: Helper username: $helperName');
+
+      // Create the offer data
+      Map<String, dynamic> offerData = {
+        'requestId': requestId,
+        'helperId': helperId,
+        'helperName': helperName,
+        'requesterId': requesterId,
+        'status': 'pending',
+        'createdAt': FieldValue.serverTimestamp(),
+      };
+
+      // Add optional fields if provided
+      if (customMessage != null && customMessage.isNotEmpty) {
+        offerData['customMessage'] = customMessage;
+      }
+      if (alternativePrice != null) {
+        offerData['alternativePrice'] = alternativePrice;
+      }
+
+      // Create new offer with validation
+      final offerRef = await FirebaseFirestore.instance.collection('offers').add(offerData).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () => throw Exception('Failed to create offer. Please try again.'),
+      );
+
+      debugPrint('ViewOffersTab: Offer created with ID: ${offerRef.id}');
+
+      // Get requester username for notification
+      final requesterDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(requesterId)
+          .get()
+          .timeout(const Duration(seconds: 10));
+      
+      final requesterUsername = requesterDoc.data()?['username'] ?? 'Unknown User';
+
+      // Create notification message
+      String notificationMessage = '$helperName is interested in helping with "$requestTitle"';
+      if (alternativePrice != null) {
+        notificationMessage += ' and proposed Rs. ${alternativePrice.toStringAsFixed(0)}';
+      }
+      if (customMessage != null && customMessage.isNotEmpty) {
+        notificationMessage += ' with a custom message';
+      }
 
       // Create notification with error handling (don't fail the whole operation if this fails)
       try {
         await NotificationService.createNotification(
           userId: requesterId,
           title: 'New Offer Received',
-          message: '$helperName is interested in helping with "$requestTitle"',
+          message: notificationMessage,
           type: 'new_offer',
           additionalData: {
             'offerId': offerRef.id,
@@ -427,6 +495,8 @@ class _ViewOffersTabState extends State<ViewOffersTab> {
             'helperId': helperId,
             'helperName': helperName,
             'requesterUsername': requesterUsername,
+            'hasCustomMessage': customMessage != null && customMessage.isNotEmpty,
+            'hasAlternativePrice': alternativePrice != null,
           },
         ).timeout(const Duration(seconds: 10));
       } catch (notificationError) {
@@ -435,7 +505,13 @@ class _ViewOffersTabState extends State<ViewOffersTab> {
       }
 
       if (!mounted) return;
-      _showSuccessSnackBar(context, 'Success!', 'Your offer has been sent successfully');
+      
+      String successMessage = 'Your offer has been sent successfully';
+      if (alternativePrice != null || (customMessage != null && customMessage.isNotEmpty)) {
+        successMessage += ' with your custom terms';
+      }
+      
+      _showSuccessSnackBar(context, 'Success!', successMessage);
       
     } on FirebaseException catch (e) {
       debugPrint('ViewOffersTab: Firebase error making offer: ${e.code} - ${e.message}');
@@ -841,6 +917,72 @@ class _ViewOffersTabState extends State<ViewOffersTab> {
                                           color: Colors.green,
                                         ),
                                       ),
+                                      // Show alternative price if proposed
+                                      if (offerData['alternativePrice'] != null) ...[
+                                        const SizedBox(height: 4),
+                                        Container(
+                                          padding: const EdgeInsets.all(8),
+                                          decoration: BoxDecoration(
+                                            color: Colors.orange.shade50,
+                                            borderRadius: BorderRadius.circular(4),
+                                            border: Border.all(color: Colors.orange.shade200),
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              Icon(Icons.price_change, size: 16, color: Colors.orange.shade700),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                'You proposed: Rs. ${(offerData['alternativePrice'] as num).toStringAsFixed(0)}',
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.w500,
+                                                  color: Colors.orange.shade800,
+                                                  fontSize: 12,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                      // Show custom message if provided
+                                      if (offerData['customMessage'] != null && 
+                                          (offerData['customMessage'] as String).isNotEmpty) ...[
+                                        const SizedBox(height: 4),
+                                        Container(
+                                          padding: const EdgeInsets.all(8),
+                                          decoration: BoxDecoration(
+                                            color: Colors.blue.shade50,
+                                            borderRadius: BorderRadius.circular(4),
+                                            border: Border.all(color: Colors.blue.shade200),
+                                          ),
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Row(
+                                                children: [
+                                                  Icon(Icons.message, size: 16, color: Colors.blue.shade700),
+                                                  const SizedBox(width: 4),
+                                                  Text(
+                                                    'Your message:',
+                                                    style: TextStyle(
+                                                      fontWeight: FontWeight.w500,
+                                                      color: Colors.blue.shade800,
+                                                      fontSize: 12,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                offerData['customMessage'] as String,
+                                                style: TextStyle(
+                                                  color: Colors.blue.shade700,
+                                                  fontSize: 12,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
                                     ] else ...[
                                       Text(
                                         'This request is no longer available',

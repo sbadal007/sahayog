@@ -3,6 +3,7 @@ class Request {
   final String userId;
   final String title;
   final String description;
+  final double price;
   final double latitude;
   final double longitude;
   final DateTime createdAt;
@@ -13,6 +14,7 @@ class Request {
     required this.userId,
     required this.title,
     required this.description,
+    required this.price,
     required this.latitude,
     required this.longitude,
     required this.createdAt,
@@ -25,6 +27,7 @@ class Request {
       'userId': userId,
       'title': title,
       'description': description,
+      'price': price,
       'latitude': latitude,
       'longitude': longitude,
       'createdAt': createdAt.toIso8601String(),
@@ -38,6 +41,7 @@ class Request {
       userId: map['userId'],
       title: map['title'],
       description: map['description'],
+      price: (map['price'] as num?)?.toDouble() ?? 0.0,
       latitude: map['latitude'],
       longitude: map['longitude'],
       createdAt: DateTime.parse(map['createdAt']),

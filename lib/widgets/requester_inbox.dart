@@ -408,6 +408,71 @@ class _RequesterInboxState extends State<RequesterInbox> with SingleTickerProvid
                 return const Text('Loading request details...');
               },
             ),
+            // Show alternative price if proposed
+            if (offer['alternativePrice'] != null) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(8.0),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.orange.shade200),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.price_change, size: 18, color: Colors.orange.shade700),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Proposed Price: Rs. ${(offer['alternativePrice'] as num).toStringAsFixed(0)}',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w500,
+                          color: Colors.orange.shade800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            // Show custom message if provided
+            if (offer['customMessage'] != null && 
+                (offer['customMessage'] as String).isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(8.0),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blue.shade200),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.message, size: 18, color: Colors.blue.shade700),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Personal Message:',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w500,
+                            color: Colors.blue.shade800,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      offer['customMessage'] as String,
+                      style: TextStyle(
+                        color: Colors.blue.shade700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 12),
             Text('Offered on: ${createdAt.toString().split(' ')[0]}',
                 style: TextStyle(fontSize: 12, color: Colors.grey[500])),

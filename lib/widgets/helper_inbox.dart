@@ -131,28 +131,133 @@ class HelperInbox extends StatelessWidget {
                     : 'No date';
 
                 return Card(
-                  child: ListTile(
-                    title: Text(request?['title'] ?? 'Request'),
-                    subtitle: Column(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        Text(
+                          request?['title'] ?? 'Request',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
                         Text('Status: ${offer['status']}'),
                         Text('Created: $date'),
-                        if (offer['status'] == 'accepted')
-                          ElevatedButton(
-                            onPressed: () {
-                              // TODO: Implement chat or contact functionality
-                            },
-                            child: const Text('Contact Requester'),
+                        
+                        // Show original request price if available
+                        if (request?['price'] != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            'Requested Price: Rs. ${request!['price']?.toString() ?? 'N/A'}',
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                              fontSize: 14,
+                            ),
                           ),
+                        ],
+                        
+                        // Show alternative price if proposed
+                        if (offer['alternativePrice'] != null) ...[
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.shade50,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.orange.shade200),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(Icons.price_change, size: 16, color: Colors.orange.shade700),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'You proposed: Rs. ${(offer['alternativePrice'] as num).toStringAsFixed(0)}',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.orange.shade800,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                        
+                        // Show custom message if provided
+                        if (offer['customMessage'] != null && 
+                            (offer['customMessage'] as String).isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.blue.shade50,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.blue.shade200),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(Icons.message, size: 16, color: Colors.blue.shade700),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Your message:',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w500,
+                                        color: Colors.blue.shade800,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  offer['customMessage'] as String,
+                                  style: TextStyle(
+                                    color: Colors.blue.shade700,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                        
+                        const SizedBox(height: 12),
+                        
+                        // Action buttons
+                        Row(
+                          children: [
+                            if (offer['status'] == 'accepted')
+                              Expanded(
+                                child: ElevatedButton.icon(
+                                  onPressed: () {
+                                    // TODO: Implement chat or contact functionality
+                                  },
+                                  icon: const Icon(Icons.chat),
+                                  label: const Text('Contact Requester'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.green,
+                                    foregroundColor: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            if (offer['status'] == 'pending') ...[
+                              const Spacer(),
+                              IconButton(
+                                icon: const Icon(Icons.close, color: Colors.red),
+                                onPressed: () => _cancelOffer(context, offers[index].id),
+                                tooltip: 'Cancel Offer',
+                              ),
+                            ],
+                          ],
+                        ),
                       ],
                     ),
-                    trailing: offer['status'] == 'pending'
-                        ? IconButton(
-                            icon: const Icon(Icons.close),
-                            onPressed: () => _cancelOffer(context, offers[index].id),
-                          )
-                        : null,
                   ),
                 );
               },
