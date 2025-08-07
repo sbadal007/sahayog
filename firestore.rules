@@ -1,0 +1,57 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Users collection rules
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null; // Allow other users to read public profile info
+    }
+    
+    // Requests collection rules
+    match /requests/{requestId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && 
+        (request.auth.uid == resource.data.requesterId || request.auth.uid == resource.data.helperId);
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.requesterId;
+    }
+    
+    // Offers collection rules
+    match /offers/{offerId} {
+      allow read: if request.auth != null && 
+        (request.auth.uid == resource.data.helperId || request.auth.uid == resource.data.requesterId);
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.helperId;
+      allow update: if request.auth != null && 
+        (request.auth.uid == resource.data.helperId || request.auth.uid == resource.data.requesterId);
+    }
+    
+    // Ratings collection rules - NEW
+    match /ratings/{ratingId} {
+      // Allow reading ratings for the user being rated or the user who gave the rating
+      allow read: if request.auth != null && 
+        (request.auth.uid == resource.data.reviewerId || request.auth.uid == resource.data.revieweeId);
+      
+      // Allow creating ratings only by the reviewer
+      allow create: if request.auth != null && 
+        request.auth.uid == request.resource.data.reviewerId &&
+        request.resource.data.reviewerId != request.resource.data.revieweeId; // Can't rate yourself
+      
+      // Prevent updates and deletes to maintain rating integrity
+      allow update, delete: if false;
+    }
+    
+    // User rating summaries collection rules - NEW
+    match /userRatingSummaries/{userId} {
+      // Allow reading your own summary and others' summaries
+      allow read: if request.auth != null;
+      
+      // Only allow system/service to write summaries (through server-side operations)
+      // For now, allow authenticated users to write (in production, use Cloud Functions)
+      allow write: if request.auth != null;
+    }
+    
+    // Messages collection rules (if you have this)
+    match /messages/{messageId} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}

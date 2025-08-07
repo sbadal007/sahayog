@@ -154,7 +154,7 @@ class _HomeScreenState extends State<HomeScreen> {
     bool isSelected = _selectedIndex == index;
     return Expanded(
       child: Material(
-        color: isSelected ? Colors.blue.withOpacity(0.1) : Colors.transparent,
+        color: isSelected ? Colors.blue.withValues(alpha: 0.1) : Colors.transparent,
         child: InkWell(
           onTap: () => setState(() => _selectedIndex = index),
           child: Container(

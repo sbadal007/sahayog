@@ -2,20 +2,28 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../services/rating_service.dart';
+import '../widgets/rating_dialog.dart';
 
-class HelperInbox extends StatelessWidget {
+class HelperInbox extends StatefulWidget {
   final String userId;
 
   const HelperInbox({super.key, required this.userId});
 
   @override
+  State<HelperInbox> createState() => _HelperInboxState();
+}
+
+class _HelperInboxState extends State<HelperInbox> {
+
+  @override
   Widget build(BuildContext context) {
-    debugPrint('HelperInbox: Loading offers for userId: $userId');
+    debugPrint('HelperInbox: Loading offers for userId: ${widget.userId}');
     
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('offers')
-          .where('helperId', isEqualTo: userId)
+          .where('helperId', isEqualTo: widget.userId)
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -232,20 +240,39 @@ class HelperInbox extends StatelessWidget {
                         // Action buttons
                         Row(
                           children: [
-                            if (offer['status'] == 'accepted')
+                            if (offer['status'] == 'accepted') ...[
+                              Expanded(
+                                child: ElevatedButton.icon(
+                                  onPressed: () => _showRatingDialog(
+                                    context,
+                                    offers[index].id,
+                                    offer['requestId'] ?? '',
+                                    offer['requesterId'] ?? '',
+                                    request?['title'] ?? 'Unknown Request',
+                                  ),
+                                  icon: const Icon(Icons.star_rate),
+                                  label: const Text('Rate Requester'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.amber,
+                                    foregroundColor: Colors.black,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
                               Expanded(
                                 child: ElevatedButton.icon(
                                   onPressed: () {
                                     // TODO: Implement chat or contact functionality
                                   },
                                   icon: const Icon(Icons.chat),
-                                  label: const Text('Contact Requester'),
+                                  label: const Text('Contact'),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: Colors.green,
                                     foregroundColor: Colors.white,
                                   ),
                                 ),
                               ),
+                            ],
                             if (offer['status'] == 'pending') ...[
                               const Spacer(),
                               IconButton(
@@ -282,6 +309,113 @@ class HelperInbox extends StatelessWidget {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Failed to cancel offer')),
       );
+    }
+  }
+
+  Future<void> _showRatingDialog(
+    BuildContext context,
+    String offerId,
+    String requestId,
+    String requesterId,
+    String requestTitle,
+  ) async {
+    try {
+      // Check if user can rate (hasn't rated already)
+      final canRate = await RatingService.canUserRate(
+        requestId: requestId,
+        reviewerId: widget.userId,
+        revieweeId: requesterId,
+      );
+
+      if (!canRate) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('You have already rated this requester')),
+          );
+        }
+        return;
+      }
+
+      // Get requester name
+      final requesterDoc = await FirebaseFirestore.instance.collection('users').doc(requesterId).get();
+      final requesterName = requesterDoc.data()?['username'] ?? 'Anonymous Requester';
+
+      if (!mounted) return;
+
+      // Show rating dialog
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext dialogContext) {
+          return RatingDialog(
+            requestTitle: requestTitle,
+            revieweeName: requesterName,
+            reviewType: 'helper_to_requester',
+            onCancel: () {
+              Navigator.of(dialogContext).pop();
+            },
+            onSubmit: (double rating, String? review) async {
+              Navigator.of(dialogContext).pop();
+              await _submitRating(
+                offerId: offerId,
+                requestId: requestId,
+                revieweeId: requesterId,
+                revieweeName: requesterName,
+                rating: rating,
+                review: review,
+              );
+            },
+          );
+        },
+      );
+    } catch (e) {
+      debugPrint('Error showing rating dialog: $e');
+    }
+  }
+
+  Future<void> _submitRating({
+    required String offerId,
+    required String requestId,
+    required String revieweeId,
+    required String revieweeName,
+    required double rating,
+    String? review,
+  }) async {
+    try {
+      // Get current user's name
+      final userDoc = await FirebaseFirestore.instance.collection('users').doc(widget.userId).get();
+      final userName = userDoc.data()?['username'] ?? 'Anonymous User';
+
+      await RatingService.createRating(
+        requestId: requestId,
+        offerId: offerId,
+        reviewerId: widget.userId,
+        revieweeId: revieweeId,
+        reviewerName: userName,
+        revieweeName: revieweeName,
+        rating: rating,
+        review: review,
+        reviewType: 'helper_to_requester',
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Rating submitted successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error submitting rating: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to submit rating: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 }

@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:intl/intl.dart';
+import '../services/rating_service.dart';
+import '../widgets/rating_dialog.dart';
+import '../widgets/rating_display_widget.dart';
 import '../widgets/user_status_widget.dart';
 
 class RequesterInbox extends StatefulWidget {
@@ -75,12 +80,132 @@ class _RequesterInboxState extends State<RequesterInbox> with SingleTickerProvid
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Offer ${action}ed successfully!')),
         );
+
+        // Show rating dialog after accepting or rejecting offer
+        if (action == 'accept' || action == 'reject') {
+          await _showRatingDialog(offerId, requestId, action);
+        }
       }
     } catch (e) {
       debugPrint('Error handling offer: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to $action offer')),
+        );
+      }
+    }
+  }
+
+  Future<void> _showRatingDialog(String offerId, String requestId, String action) async {
+    try {
+      // Get offer details
+      final offerDoc = await FirebaseFirestore.instance.collection('offers').doc(offerId).get();
+      if (!offerDoc.exists) return;
+
+      final offerData = offerDoc.data()!;
+      final helperId = offerData['helperId'] as String;
+      final helperName = offerData['helperName'] as String;
+      final currentUserId = widget.userId ?? '';
+
+      // Get request details
+      final requestDoc = await FirebaseFirestore.instance.collection('requests').doc(requestId).get();
+      if (!requestDoc.exists) return;
+
+      final requestData = requestDoc.data()!;
+      final requestTitle = requestData['title'] as String? ?? 'Unknown Request';
+
+      // Check if user can rate (hasn't rated already)
+      final canRate = await RatingService.canUserRate(
+        requestId: requestId,
+        reviewerId: currentUserId,
+        revieweeId: helperId,
+      );
+
+      if (!canRate) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('You have already rated this helper')),
+          );
+        }
+        return;
+      }
+
+      if (!mounted) return;
+
+      // Show rating dialog
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext dialogContext) {
+          return RatingDialog(
+            requestTitle: requestTitle,
+            revieweeName: helperName,
+            reviewType: 'requester_to_helper',
+            onCancel: () {
+              Navigator.of(dialogContext).pop();
+            },
+            onSubmit: (double rating, String? review) async {
+              Navigator.of(dialogContext).pop();
+              await _submitRating(
+                offerId: offerId,
+                requestId: requestId,
+                revieweeId: helperId,
+                revieweeName: helperName,
+                rating: rating,
+                review: review,
+              );
+            },
+          );
+        },
+      );
+    } catch (e) {
+      debugPrint('Error showing rating dialog: $e');
+    }
+  }
+
+  Future<void> _submitRating({
+    required String offerId,
+    required String requestId,
+    required String revieweeId,
+    required String revieweeName,
+    required double rating,
+    String? review,
+  }) async {
+    try {
+      final currentUserId = widget.userId ?? '';
+      
+      // Get current user's name
+      final userDoc = await FirebaseFirestore.instance.collection('users').doc(currentUserId).get();
+      final userName = userDoc.data()?['username'] ?? 'Anonymous User';
+
+      await RatingService.createRating(
+        requestId: requestId,
+        offerId: offerId,
+        reviewerId: currentUserId,
+        revieweeId: revieweeId,
+        reviewerName: userName,
+        revieweeName: revieweeName,
+        rating: rating,
+        review: review,
+        reviewType: 'requester_to_helper',
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Rating submitted successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error submitting rating: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to submit rating: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
