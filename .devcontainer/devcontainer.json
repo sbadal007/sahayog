@@ -1,0 +1,33 @@
+{
+  "name": "Sahayog Flutter Development",
+  "image": "cirrusci/flutter:latest",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "18"
+    },
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "Dart-Code.flutter",
+        "Dart-Code.dart-code",
+        "ms-vscode.vscode-json",
+        "bradlc.vscode-tailwindcss",
+        "formulahendry.auto-rename-tag",
+        "ms-vscode.vscode-typescript-next"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "dart.flutterSdkPath": "/home/cirrus/sdks/flutter",
+        "dart.sdkPath": "/home/cirrus/sdks/flutter/bin/cache/dart-sdk"
+      }
+    }
+  },
+  "forwardPorts": [8080, 3000, 5000],
+  "postCreateCommand": "flutter doctor && flutter pub get",
+  "remoteUser": "cirrus",
+  "mounts": [
+    "source=flutter-pub-cache,target=/home/cirrus/.pub-cache,type=volume"
+  ]
+}
