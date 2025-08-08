@@ -3,12 +3,55 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:async';
 
 class UserProvider extends ChangeNotifier {
-  String? uid;
-  String? username;
-  String? email;
-  String? role;
-  String? profileImageUrl;
+  String? _uid;
+  String? _username;
+  String? _email;
+  String? _role;
+  String? _profileImageUrl;
   StreamSubscription<DocumentSnapshot>? _userSubscription;
+
+  // Getters
+  String? get uid => _uid;
+  String? get username => _username;
+  String? get email => _email;
+  String? get role => _role;
+  String? get profileImageUrl => _profileImageUrl;
+
+  // Setters with notification
+  set uid(String? value) {
+    if (_uid != value) {
+      _uid = value;
+      notifyListeners();
+    }
+  }
+
+  set username(String? value) {
+    if (_username != value) {
+      _username = value;
+      notifyListeners();
+    }
+  }
+
+  set email(String? value) {
+    if (_email != value) {
+      _email = value;
+      notifyListeners();
+    }
+  }
+
+  set role(String? value) {
+    if (_role != value) {
+      _role = value;
+      notifyListeners();
+    }
+  }
+
+  set profileImageUrl(String? value) {
+    if (_profileImageUrl != value) {
+      _profileImageUrl = value;
+      notifyListeners();
+    }
+  }
 
   Future<void> loadUserFromFirestore(String uid) async {
     try {
@@ -23,11 +66,11 @@ class UserProvider extends ChangeNotifier {
           .listen((doc) {
         if (doc.exists) {
           final data = doc.data()!;
-          this.uid = uid;
-          username = data['username'];
-          email = data['email'];
-          role = data['role'];
-          profileImageUrl = data['profileImageUrl'];
+          _uid = uid;
+          _username = data['username'];
+          _email = data['email'];
+          _role = data['role'];
+          _profileImageUrl = data['profileImageUrl'];
           notifyListeners();
         }
       });
@@ -39,11 +82,11 @@ class UserProvider extends ChangeNotifier {
   void clear() {
     _userSubscription?.cancel();
     _userSubscription = null;
-    uid = null;
-    username = null;
-    email = null;
-    role = null;
-    profileImageUrl = null;
+    _uid = null;
+    _username = null;
+    _email = null;
+    _role = null;
+    _profileImageUrl = null;
     notifyListeners();
   }
 

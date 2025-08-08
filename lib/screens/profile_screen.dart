@@ -13,6 +13,7 @@ import '../services/rating_service.dart';
 import '../widgets/user_status_widget.dart';
 import '../widgets/user_avatar.dart';
 import '../widgets/rating_display_widget.dart';
+import '../widgets/firebase_storage_image.dart';
 import '../providers/user_provider.dart';
 import '../models/rating.dart';
 
@@ -254,21 +255,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildProfileImage() {
     final profileImageUrl = _userData?['profileImageUrl'] as String?;
     
+    debugPrint('ProfileScreen: Building profile image with URL: $profileImageUrl');
+    
     return Stack(
       children: [
         CircleAvatar(
           radius: 60,
           backgroundColor: Colors.grey[300],
-          backgroundImage: profileImageUrl != null
-              ? NetworkImage(profileImageUrl)
-              : null,
-          child: profileImageUrl == null
-              ? Icon(
+          child: profileImageUrl != null && profileImageUrl.isNotEmpty
+              ? ClipOval(
+                  child: FirebaseStorageImage(
+                    imageUrl: profileImageUrl,
+                    width: 120,
+                    height: 120,
+                    fit: BoxFit.cover,
+                    errorWidget: Icon(
+                      Icons.person,
+                      size: 60,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                )
+              : Icon(
                   Icons.person,
                   size: 60,
                   color: Colors.grey[600],
-                )
-              : null,
+                ),
         ),
         if (_isUploading)
           Positioned.fill(
