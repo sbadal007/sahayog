@@ -3,7 +3,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/rating_service.dart';
+import '../services/chat_service.dart';
 import '../widgets/rating_dialog.dart';
+import '../screens/chat_screen.dart';
 
 class HelperInbox extends StatefulWidget {
   final String userId;
@@ -81,8 +83,10 @@ class _HelperInboxState extends State<HelperInbox> {
                 const SizedBox(height: 16),
                 ElevatedButton(
                   onPressed: () {
-                    // Trigger rebuild
-                    (context as Element).markNeedsBuild();
+                    // Use post-frame callback to avoid setState during build
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (mounted) setState(() {});
+                    });
                   },
                   child: const Text('Retry'),
                 ),
@@ -124,7 +128,10 @@ class _HelperInboxState extends State<HelperInbox> {
           itemCount: offers.length,
           padding: const EdgeInsets.all(8),
           itemBuilder: (context, index) {
-            final offer = offers[index].data() as Map<String, dynamic>;
+            final offerDoc = offers[index];
+            final offer = offerDoc.data() as Map<String, dynamic>;
+            // Add the document ID to the offer data for chat functionality
+            offer['id'] = offerDoc.id;
             
             return FutureBuilder<DocumentSnapshot>(
               future: FirebaseFirestore.instance
@@ -238,47 +245,65 @@ class _HelperInboxState extends State<HelperInbox> {
                         const SizedBox(height: 12),
                         
                         // Action buttons
-                        Row(
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
                             if (offer['status'] == 'accepted') ...[
-                              Expanded(
-                                child: ElevatedButton.icon(
-                                  onPressed: () => _showRatingDialog(
-                                    context,
-                                    offers[index].id,
-                                    offer['requestId'] ?? '',
-                                    offer['requesterId'] ?? '',
-                                    request?['title'] ?? 'Unknown Request',
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: ElevatedButton.icon(
+                                      onPressed: () => _showRatingDialog(
+                                        context,
+                                        offers[index].id,
+                                        offer['requestId'] ?? '',
+                                        offer['requesterId'] ?? '',
+                                        request?['title'] ?? 'Unknown Request',
+                                      ),
+                                      icon: const Icon(Icons.star_rate),
+                                      label: const Text('Rate Requester'),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.amber,
+                                        foregroundColor: Colors.black,
+                                      ),
+                                    ),
                                   ),
-                                  icon: const Icon(Icons.star_rate),
-                                  label: const Text('Rate Requester'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.amber,
-                                    foregroundColor: Colors.black,
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: ElevatedButton.icon(
+                                      onPressed: () => _openChat(offer, request),
+                                      icon: const Icon(Icons.chat),
+                                      label: const Text('Chat'),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.blue,
+                                        foregroundColor: Colors.white,
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: ElevatedButton.icon(
-                                  onPressed: () {
-                                    // TODO: Implement chat or contact functionality
-                                  },
-                                  icon: const Icon(Icons.chat),
-                                  label: const Text('Contact'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.green,
-                                    foregroundColor: Colors.white,
-                                  ),
-                                ),
+                                ],
                               ),
                             ],
                             if (offer['status'] == 'pending') ...[
-                              const Spacer(),
-                              IconButton(
-                                icon: const Icon(Icons.close, color: Colors.red),
-                                onPressed: () => _cancelOffer(context, offers[index].id),
-                                tooltip: 'Cancel Offer',
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: ElevatedButton.icon(
+                                      onPressed: () => _openChat(offer, request),
+                                      icon: const Icon(Icons.chat_bubble_outline),
+                                      label: const Text('Chat'),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.blue[100],
+                                        foregroundColor: Colors.blue[800],
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  IconButton(
+                                    icon: const Icon(Icons.close, color: Colors.red),
+                                    onPressed: () => _cancelOffer(context, offers[index].id),
+                                    tooltip: 'Cancel Offer',
+                                  ),
+                                ],
                               ),
                             ],
                           ],
@@ -295,6 +320,22 @@ class _HelperInboxState extends State<HelperInbox> {
     );
   }
 
+  void _showSnackBar(BuildContext context, String message, {bool isError = false}) {
+    if (!mounted) return; // Check if widget is still mounted
+    
+    try {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: isError ? Colors.red : null,
+        ),
+      );
+    } catch (e) {
+      // Ignore errors if widget is disposed
+      debugPrint('Error showing SnackBar: $e');
+    }
+  }
+
   Future<void> _cancelOffer(BuildContext context, String offerId) async {
     try {
       await FirebaseFirestore.instance
@@ -302,13 +343,9 @@ class _HelperInboxState extends State<HelperInbox> {
           .doc(offerId)
           .delete();
       
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Offer cancelled')),
-      );
+      _showSnackBar(context, 'Offer cancelled');
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to cancel offer')),
-      );
+      _showSnackBar(context, 'Failed to cancel offer', isError: true);
     }
   }
 
@@ -328,11 +365,7 @@ class _HelperInboxState extends State<HelperInbox> {
       );
 
       if (!canRate) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('You have already rated this requester')),
-          );
-        }
+        _showSnackBar(context, 'You have already rated this requester', isError: true);
         return;
       }
 
@@ -398,24 +431,51 @@ class _HelperInboxState extends State<HelperInbox> {
         reviewType: 'helper_to_requester',
       );
 
-      if (mounted) {
+      _showSnackBar(context, 'Rating submitted successfully!');
+    } catch (e) {
+      debugPrint('Error submitting rating: $e');
+      _showSnackBar(context, 'Failed to submit rating: ${e.toString()}', isError: true);
+    }
+  }
+
+  Future<void> _openChat(Map<String, dynamic> offer, Map<String, dynamic>? request) async {
+    try {
+      final offerId = offer['id'] ?? '';
+      final requesterId = offer['requesterId'] ?? '';
+      final requestId = offer['requestId'] ?? '';
+      final requesterName = request?['username'] ?? 'Requester';
+      
+      if (offerId.isEmpty || requesterId.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Rating submitted successfully!'),
-            backgroundColor: Colors.green,
+            content: Text('Cannot open chat: Invalid offer data'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      // Create or get conversation
+      final conversationId = await ChatService.createOrGetConversation(
+        offerId: offerId,
+        requesterId: requesterId,
+        helperId: widget.userId,
+        requestId: requestId.isEmpty ? null : requestId,
+      );
+
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ChatScreen(
+              conversationId: conversationId,
+              otherParticipantName: requesterName,
+            ),
           ),
         );
       }
     } catch (e) {
-      debugPrint('Error submitting rating: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to submit rating: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      _showSnackBar(context, 'Failed to open chat: $e', isError: true);
     }
   }
 }

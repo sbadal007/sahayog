@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:intl/intl.dart';
 import '../services/rating_service.dart';
+import '../services/chat_service.dart';
 import '../widgets/rating_dialog.dart';
-import '../widgets/rating_display_widget.dart';
 import '../widgets/user_status_widget.dart';
+import '../screens/chat_screen.dart';
 
 class RequesterInbox extends StatefulWidget {
   final String? userId;
@@ -81,9 +80,9 @@ class _RequesterInboxState extends State<RequesterInbox> with SingleTickerProvid
           SnackBar(content: Text('Offer ${action}ed successfully!')),
         );
 
-        // Show rating dialog after accepting or rejecting offer
-        if (action == 'accept' || action == 'reject') {
-          await _showRatingDialog(offerId, requestId, action);
+        // Navigate to chat after accepting offer (similar to helper tab functionality)
+        if (action == 'accept') {
+          await _navigateToChat(offerId, requestId);
         }
       }
     } catch (e) {
@@ -96,6 +95,57 @@ class _RequesterInboxState extends State<RequesterInbox> with SingleTickerProvid
     }
   }
 
+  Future<void> _navigateToChat(String offerId, String requestId) async {
+    try {
+      // Get offer details to find the helper
+      final offerDoc = await FirebaseFirestore.instance
+          .collection('offers')
+          .doc(offerId)
+          .get();
+      
+      if (!offerDoc.exists) {
+        debugPrint('RequesterInbox: Offer document not found: $offerId');
+        return;
+      }
+
+      final offerData = offerDoc.data()!;
+      final helperId = offerData['helperId'] as String;
+      final helperName = offerData['helperName'] as String? ?? 'Helper';
+      final requestId = offerData['requestId'] as String? ?? '';
+      final requesterId = currentUserId;
+
+      // Create or get conversation
+      final conversationId = await ChatService.createOrGetConversation(
+        offerId: offerId,
+        requesterId: requesterId,
+        helperId: helperId,
+        requestId: requestId.isEmpty ? null : requestId,
+      );
+
+      if (mounted) {
+        // Navigate to chat screen
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ChatScreen(
+              conversationId: conversationId,
+              otherParticipantName: helperName,
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('RequesterInbox: Error navigating to chat: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to open chat. Please try again.')),
+        );
+      }
+    }
+  }
+
+  // Keep this method for future rating implementation after chat functionality
+  // ignore: unused_element
   Future<void> _showRatingDialog(String offerId, String requestId, String action) async {
     try {
       // Get offer details
@@ -363,6 +413,8 @@ class _RequesterInboxState extends State<RequesterInbox> with SingleTickerProvid
           itemBuilder: (context, index) {
             final doc = docs[index];
             final offer = doc.data() as Map<String, dynamic>;
+            // Add the document ID to the offer data for chat functionality
+            offer['id'] = doc.id;
             return _buildOfferCard(doc.id, offer);
           },
         );
@@ -624,6 +676,31 @@ class _RequesterInboxState extends State<RequesterInbox> with SingleTickerProvid
                   ),
                 ],
               ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () => _openChat(offer),
+                  icon: const Icon(Icons.chat_bubble_outline),
+                  label: const Text('Chat with Helper'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue[100],
+                    foregroundColor: Colors.blue[800],
+                  ),
+                ),
+              ),
+            ],
+            if (status == 'accepted') ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () => _openChat(offer),
+                  icon: const Icon(Icons.chat),
+                  label: const Text('Chat with Helper'),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
+                ),
+              ),
             ],
             if (_showDebugInfo) ...[
               const SizedBox(height: 8),
@@ -795,6 +872,54 @@ class _RequesterInboxState extends State<RequesterInbox> with SingleTickerProvid
             ],
           ),
         );
+    }
+  }
+
+  Future<void> _openChat(Map<String, dynamic> offer) async {
+    try {
+      final offerId = offer['id'] ?? '';
+      final helperId = offer['helperId'] ?? '';
+      final helperName = offer['helperName'] ?? 'Helper';
+      final requestId = offer['requestId'] ?? '';
+      
+      if (offerId.isEmpty || helperId.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Cannot open chat: Invalid offer data'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      // Create or get conversation
+      final conversationId = await ChatService.createOrGetConversation(
+        offerId: offerId,
+        requesterId: currentUserId,
+        helperId: helperId,
+        requestId: requestId.isEmpty ? null : requestId,
+      );
+
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ChatScreen(
+              conversationId: conversationId,
+              otherParticipantName: helperName,
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to open chat: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 

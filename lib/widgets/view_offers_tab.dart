@@ -3,8 +3,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../services/notification_service.dart';
+import '../services/chat_service.dart';
 import '../widgets/offer_dialog.dart';
 import '../widgets/user_status_widget.dart';
+import '../screens/chat_screen.dart';
 
 class ViewOffersTab extends StatefulWidget {
   const ViewOffersTab({super.key});
@@ -429,7 +431,10 @@ class _ViewOffersTabState extends State<ViewOffersTab> {
     });
 
     try {
-      final user = FirebaseAuth.instance.currentUser!;
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        throw Exception('User not authenticated');
+      }
       final helperId = user.uid;
       
       debugPrint('ViewOffersTab: Creating offer with helperId: $helperId, requesterId: $requesterId');
@@ -506,12 +511,57 @@ class _ViewOffersTabState extends State<ViewOffersTab> {
 
       if (!mounted) return;
       
+      // Create chat conversation immediately after offer creation
+      String? conversationId;
+      try {
+        conversationId = await ChatService.createOrGetConversation(
+          offerId: offerRef.id,
+          requesterId: requesterId,
+          helperId: helperId,
+          requestId: requestId,
+        );
+        debugPrint('ViewOffersTab: Chat conversation created: $conversationId');
+      } catch (chatError) {
+        debugPrint('ViewOffersTab: Chat creation failed (non-critical): $chatError');
+        // Don't fail the whole operation for chat creation errors
+      }
+      
       String successMessage = 'Your offer has been sent successfully';
       if (alternativePrice != null || (customMessage != null && customMessage.isNotEmpty)) {
         successMessage += ' with your custom terms';
       }
+      successMessage += '. You can now chat with the requester!';
       
       _showSuccessSnackBar(context, 'Success!', successMessage);
+      
+      // Show chat navigation option only if conversation was created successfully
+      if (mounted && conversationId != null) {
+        // Show a SnackBar with chat action
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: Colors.blue.shade600,
+            content: const Text('Ready to chat with the requester!'),
+            action: SnackBarAction(
+              label: 'Open Chat',
+              textColor: Colors.white,
+              onPressed: () async {
+                if (mounted) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ChatScreen(
+                        conversationId: conversationId!,
+                        otherParticipantName: 'Requester',
+                      ),
+                    ),
+                  );
+                }
+              },
+            ),
+            duration: const Duration(seconds: 8),
+          ),
+        );
+      }
       
     } on FirebaseException catch (e) {
       debugPrint('ViewOffersTab: Firebase error making offer: ${e.code} - ${e.message}');
@@ -564,60 +614,74 @@ class _ViewOffersTabState extends State<ViewOffersTab> {
   }
 
   void _showErrorSnackBar(BuildContext context, String title, String message, {SnackBarAction? action}) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: Colors.red.shade600,
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
+    if (!mounted) return; // Check if widget is still mounted
+    
+    try {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.red.shade600,
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
               ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              message,
-              style: const TextStyle(color: Colors.white),
-            ),
-          ],
+              const SizedBox(height: 4),
+              Text(
+                message,
+                style: const TextStyle(color: Colors.white),
+              ),
+            ],
+          ),
+          action: action,
+          duration: const Duration(seconds: 5),
+          behavior: SnackBarBehavior.floating,
         ),
-        action: action,
-        duration: const Duration(seconds: 5),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+      );
+    } catch (e) {
+      // Ignore errors if widget is disposed
+      debugPrint('Error showing SnackBar: $e');
+    }
   }
 
   void _showSuccessSnackBar(BuildContext context, String title, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: Colors.green.shade600,
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
+    if (!mounted) return; // Check if widget is still mounted
+    
+    try {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.green.shade600,
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
               ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              message,
-              style: const TextStyle(color: Colors.white),
-            ),
-          ],
+              const SizedBox(height: 4),
+              Text(
+                message,
+                style: const TextStyle(color: Colors.white),
+              ),
+            ],
+          ),
+          duration: const Duration(seconds: 3),
+          behavior: SnackBarBehavior.floating,
         ),
-        duration: const Duration(seconds: 3),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+      );
+    } catch (e) {
+      // Ignore errors if widget is disposed
+      debugPrint('Error showing SnackBar: $e');
+    }
   }
 
   Widget _buildOfferStatusChip(String status) {
@@ -793,6 +857,7 @@ class _ViewOffersTabState extends State<ViewOffersTab> {
               ),
               Expanded(
                 child: StreamBuilder<QuerySnapshot>(
+                  key: ValueKey('offers_stream_${DateTime.now().millisecondsSinceEpoch}'),
                   stream: FirebaseFirestore.instance
                       .collection('offers')
                       .where('helperId', isEqualTo: currentUser.uid)
@@ -807,8 +872,10 @@ class _ViewOffersTabState extends State<ViewOffersTab> {
                       return _buildErrorState(
                         'Unable to load your offer history. Please check your connection and try again.',
                         () {
-                          // Force rebuild to retry
-                          setState(() {});
+                          // Use post-frame callback to avoid setState during build
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (mounted) setState(() {});
+                          });
                         },
                       );
                     }
@@ -1137,7 +1204,10 @@ class _ViewOffersTabState extends State<ViewOffersTab> {
                       const SizedBox(height: 24),
                       ElevatedButton.icon(
                         onPressed: () {
-                          setState(() {}); // Refresh
+                          // Use post-frame callback to avoid setState during build
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (mounted) setState(() {}); // Refresh
+                          });
                         },
                         icon: const Icon(Icons.refresh),
                         label: const Text('Refresh'),
@@ -1364,7 +1434,12 @@ class _ViewOffersTabState extends State<ViewOffersTab> {
                         ),
                       ),
                       TextButton(
-                        onPressed: () => setState(() {}),
+                        onPressed: () {
+                          // Use post-frame callback to avoid setState during build
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (mounted) setState(() {});
+                          });
+                        },
                         child: const Text('Retry'),
                       ),
                     ],

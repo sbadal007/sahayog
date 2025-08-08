@@ -10,6 +10,7 @@ class Offer {
   final DateTime createdAt;
   final String? customMessage;
   final double? alternativePrice;
+  final String? conversationId; // Link to chat conversation
 
   Offer({
     required this.id,
@@ -21,6 +22,7 @@ class Offer {
     required this.createdAt,
     this.customMessage,
     this.alternativePrice,
+    this.conversationId,
   });
 
   Map<String, dynamic> toMap() {
@@ -34,6 +36,7 @@ class Offer {
       'createdAt': Timestamp.fromDate(createdAt),
       'customMessage': customMessage,
       'alternativePrice': alternativePrice,
+      'conversationId': conversationId,
     };
   }
 
@@ -48,6 +51,7 @@ class Offer {
       createdAt: (map['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       customMessage: map['customMessage'],
       alternativePrice: map['alternativePrice']?.toDouble(),
+      conversationId: map['conversationId'],
     );
   }
 
@@ -62,6 +66,7 @@ class Offer {
     DateTime? createdAt,
     String? customMessage,
     double? alternativePrice,
+    String? conversationId,
   }) {
     return Offer(
       id: id ?? this.id,
@@ -73,6 +78,7 @@ class Offer {
       createdAt: createdAt ?? this.createdAt,
       customMessage: customMessage ?? this.customMessage,
       alternativePrice: alternativePrice ?? this.alternativePrice,
+      conversationId: conversationId ?? this.conversationId,
     );
   }
 

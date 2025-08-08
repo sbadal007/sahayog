@@ -24,33 +24,45 @@ sahayog/
 │   ├── models/                      # Data models
 │   │   ├── user.dart               # User data model
 │   │   ├── request.dart            # Request data model with pricing
-│   │   ├── message.dart            # Message data model
-│   │   └── offer.dart              # Enhanced offer model with custom terms
+│   │   ├── message.dart            # Enhanced message model for chat system
+│   │   ├── conversation.dart       # Chat conversation data model
+│   │   ├── rating.dart             # Rating/review data model
+│   │   ├── user_rating_summary.dart # Aggregated rating statistics
+│   │   └── offer.dart              # Enhanced offer model with custom terms & chat link
 │   ├── providers/                   # State management
 │   │   └── user_provider.dart       # User data provider
 │   ├── screens/                     # UI screens
 │   │   ├── welcome_screen.dart      # Landing/auth screen
 │   │   ├── sign_in_screen.dart      # Authentication
 │   │   ├── sign_up_screen.dart      # User registration
-│   │   ├── home_screen.dart         # Main navigation hub
-│   │   └── profile_screen.dart      # User profile management
+│   │   ├── home_screen.dart         # Main navigation hub with chat tab
+│   │   ├── profile_screen.dart      # User profile with rating display
+│   │   ├── conversation_list_screen.dart # Chat conversations list
+│   │   └── chat_screen.dart         # Real-time chat interface
 │   ├── widgets/                     # Reusable UI components
 │   │   ├── create_request_tab.dart  # Request creation form
 │   │   ├── view_offers_tab.dart     # Browse requests (Helper view)
-│   │   ├── requester_inbox.dart     # Requester's dashboard
-│   │   ├── helper_inbox.dart        # Helper's dashboard
+│   │   ├── requester_inbox.dart     # Requester's dashboard with chat integration
+│   │   ├── helper_inbox.dart        # Helper's dashboard with chat integration
 │   │   ├── incoming_offers_tab.dart # Offer management
 │   │   ├── inbox_tab.dart          # Role-based inbox router
 │   │   ├── offer_dialog.dart       # Interactive offer creation dialog
+│   │   ├── rating_dialog.dart      # Interactive rating submission
+│   │   ├── rating_display_widget.dart # Rating summary display
+│   │   ├── message_bubble.dart     # Chat message UI component
+│   │   ├── typing_indicator.dart   # Real-time typing animation
 │   │   ├── user_avatar.dart        # Profile picture component
 │   │   └── user_status_widget.dart # Online/offline indicator
 │   └── services/                   # Business logic & utilities
 │       ├── firebase_service.dart   # Firebase initialization
 │       ├── user_status_service.dart # Online presence tracking
-│       └── notification_service.dart # Push notifications
+│       ├── notification_service.dart # Push notifications
+│       ├── rating_service.dart     # Rating/review operations
+│       └── chat_service.dart       # Real-time chat functionality
 ├── android/                        # Android-specific code
 ├── web/                            # Web deployment assets
-└── functions/                      # Firebase Cloud Functions (planned)
+├── functions/                      # Firebase Cloud Functions (chat archiving)
+└── firestore_chat.rules           # Enhanced security rules with chat permissions
 ```
 
 ## 🧩 Key Components/Modules
@@ -163,11 +175,42 @@ sahayog/
 ### Database Schema
 - **Users**: `uid`, `username`, `email`, `role`, `profileImageUrl`, `isOnline`, `lastSeen`
 - **Requests**: `userId`, `title`, `description`, `price`, `location`, `status`, `createdAt`
-- **Offers**: `requestId`, `helperId`, `helperName`, `requesterId`, `status`, `createdAt`, `customMessage`, `alternativePrice`
-- **Messages**: `senderId`, `receiverId`, `content`, `timestamp`
+- **Offers**: `requestId`, `helperId`, `helperName`, `requesterId`, `status`, `createdAt`, `customMessage`, `alternativePrice`, `conversationId`
+- **Conversations**: `offerId`, `participants`, `lastMessageAt`, `lastMessageText`, `unreadCount`, `isArchived`
+- **Messages**: `conversationId`, `senderId`, `senderName`, `text`, `createdAt`, `readBy`, `type`
+- **ArchivedConversations**: Same as conversations with `archivedAt` timestamp
+- **Ratings**: `requestId`, `offerId`, `reviewerId`, `revieweeId`, `rating`, `review`, `reviewType`, `createdAt`
+- **UserRatingSummaries**: `userId`, `averageRating`, `totalRatings`, `ratingBreakdown`
 - **Notifications**: `userId`, `title`, `message`, `type`, `createdAt`, `isRead`
 
 ## � Recent Updates & Features
+
+### Two-Way Chat System (August 2025)
+- **Real-time Messaging**: Bidirectional chat between Requesters and Helpers
+  - Messages linked to specific offers for contextual communication
+  - Real-time message delivery with Firestore streams
+  - Message read receipts and unread count tracking
+  - Typing indicators with debounced status updates
+- **Conversation Management**: 
+  - Automatic conversation creation when offers are accepted
+  - Conversation list with active and archived sections
+  - Chat integration directly from inbox screens
+- **Message Features**:
+  - Text messages with timestamp formatting
+  - System messages for offer-related events
+  - Read status tracking per message
+  - Message history preservation
+- **Security & Privacy**:
+  - Participant-only access to conversations
+  - Secure message creation and reading permissions
+  - Archive system for completed offer conversations
+
+### Enhanced Rating/Review System (August 2025)
+- **Comprehensive Rating Models**: Rating and UserRatingSummary data structures
+- **Interactive Rating Dialog**: Star-based rating with optional review text
+- **Profile Integration**: Rating display in user profiles with recent reviews
+- **Real-time Updates**: Stream-based rating data synchronization
+- **Bidirectional Reviews**: Both helpers and requesters can rate each other
 
 ### Enhanced Offer Management System (August 2025)
 - **Custom Messages**: Helpers can now add personalized messages with their offers
@@ -185,10 +228,12 @@ sahayog/
   - Responsive design across all screen sizes
 
 ### Technical Implementation
-- **New Models**: Enhanced Offer model with optional fields
-- **Dialog System**: Reusable offer creation dialog component  
-- **Database Updates**: Additional fields in Firestore offers collection
-- **Backward Compatibility**: Existing offers continue to work seamlessly
+- **New Models**: Enhanced Message, Conversation, Rating, and UserRatingSummary models
+- **Chat Service**: Comprehensive ChatService for real-time messaging operations
+- **UI Components**: MessageBubble, TypingIndicator, and conversation management screens
+- **Database Integration**: New Firestore collections with proper security rules
+- **Real-time Streams**: Live updates for messages, conversations, and typing indicators
+- **Archive System**: Automatic conversation archiving when offers are completed
 
 ## �🚧 Work In Progress / TODOs
 
@@ -198,20 +243,27 @@ sahayog/
 - **Cloud Functions**: Proxy service for image downloads partially implemented
 
 ### Recently Completed ✅
+- **Two-Way Chat System**: Real-time messaging between Requesters and Helpers
 - **Enhanced Offer Management**: Custom messages and alternative pricing in offers
+- **Rating/Review System**: User feedback and reputation tracking with UI integration
 - **Interactive Offer Dialog**: User-friendly interface for creating personalized offers
 - **Improved Offer Display**: Visual indicators for custom terms across all interfaces
-- **Data Model Updates**: Enhanced Offer and Request models with new fields
+- **Data Model Updates**: Enhanced models with new fields for chat and rating systems
+- **Security Rules**: Comprehensive Firestore rules for chat, ratings, and existing features
+- **Centralized Error Handling System**: Comprehensive error management with debugging
+- **Automatic Index Management**: Smart handling of Firestore index creation and building states
 
 ### Planned Features
-- **Chat System**: Direct messaging between requesters and helpers
-- **Rating System**: User feedback and reputation tracking  
+- **Chat Archiving Cloud Function**: Automated conversation archiving when offers complete
+- **Push Notifications**: Firebase Cloud Messaging for chat notifications
+- **Advanced Chat Features**: File attachments, message reactions, and message search
 - **Payment Integration**: Secure transaction processing
 - **Advanced Search**: Location-based request filtering
-- **Push Notifications**: Firebase Cloud Messaging integration
+- **Offline Chat Support**: Message queuing and offline functionality
 
 ### Technical Debt
-- **Error Boundaries**: Need comprehensive error handling UI
+- **Firestore Index Creation**: Automatic index creation fails due to permission restrictions
+- **Review Section Index Issues**: Rating/review queries need proper indexing
 - **Offline Support**: Cache management for offline functionality
 - **Testing Coverage**: Complete test suite implementation
 - **Code Documentation**: API documentation for services
@@ -225,6 +277,6 @@ sahayog/
 
 ---
 
-*Last Updated: August 06, 2025*
+*Last Updated: August 07, 2025*
 *Project Status: Active Development*
-*Latest Feature: Enhanced Offer Management with Custom Messages & Alternative Pricing*
+*Latest Feature: Two-Way Real-time Chat System with Rating Integration*

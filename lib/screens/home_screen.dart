@@ -7,7 +7,10 @@ import '../widgets/create_request_tab.dart';
 import '../widgets/view_offers_tab.dart';
 import '../widgets/helper_inbox.dart';
 import '../widgets/requester_inbox.dart';
-import 'profile_screen.dart' hide Text, Icon;
+import '../services/error_service.dart';
+import '../widgets/error_display_widget.dart';
+import 'profile_screen.dart';
+import 'conversation_list_screen.dart';
 import '../widgets/user_avatar.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -140,10 +143,11 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Row(
                 children: [
                   _buildNavItem(0, Icons.inbox, 'Inbox'),
+                  _buildNavItem(1, Icons.chat, 'Chat'),
                   if (_userRole == 'Requester')
-                    _buildNavItem(1, Icons.add_circle, 'Create Request'),
+                    _buildNavItem(2, Icons.add_circle, 'Create Request'),
                   if (_userRole == 'Helper')
-                    _buildNavItem(2, Icons.list, 'View Offers'),
+                    _buildNavItem(3, Icons.list, 'View Offers'),
                 ],
               ),
             ),
@@ -285,6 +289,38 @@ class _HomeScreenState extends State<HomeScreen> {
               ? HelperInbox(userId: user.uid)
               : RequesterInbox(userId: user.uid);
         case 1:
+          // Chat tab with enhanced error handling
+          try {
+            return const ConversationListScreen();
+          } catch (e, stackTrace) {
+            ErrorService.logChatError(
+              message: 'Error loading chat tab',
+              location: 'HomeScreen._buildTabContent.chatTab',
+              error: e,
+              stackTrace: stackTrace,
+              userId: user.uid,
+            );
+            
+            return ErrorDisplayWidget(
+              message: 'Chat feature temporarily unavailable',
+              location: 'HomeScreen - Chat Tab',
+              type: ErrorType.chat,
+              severity: ErrorSeverity.high,
+              onRetry: () {
+                setState(() {
+                  _selectedIndex = 1; // Refresh chat tab
+                });
+              },
+              error: e,
+              showDetails: true,
+              debugInfo: {
+                'userId': user.uid,
+                'userRole': _userRole,
+                'timestamp': DateTime.now().toIso8601String(),
+              },
+            );
+          }
+        case 2:
           return _userRole == 'Requester'
               ? const CreateRequestTab()
               : const Center(
@@ -297,7 +333,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
                 );
-        case 2:
+        case 3:
           return _userRole == 'Helper'
               ? const ViewOffersTab()
               : const Center(
@@ -315,34 +351,43 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Text('Unknown tab selected'),
           );
       }
-    } catch (e) {
-      debugPrint('HomeScreen: Error building tab content: $e');
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.error_outline,
-              size: 64,
-              color: Colors.red,
-            ),
-            SizedBox(height: 16),
-            Text(
-              'Error loading content: $e',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.red),
-            ),
-            SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () {
-                setState(() {
-                  _selectedIndex = 0;
-                });
-              },
-              child: Text('Reset to Inbox'),
-            ),
-          ],
-        ),
+    } catch (e, stackTrace) {
+      ErrorService.logError(
+        message: 'Error building tab content',
+        location: 'HomeScreen._buildTabContent',
+        type: ErrorType.unknown,
+        severity: ErrorSeverity.high,
+        error: e,
+        stackTrace: stackTrace,
+        additionalData: {
+          'selectedIndex': _selectedIndex,
+          'userRole': _userRole,
+          'userId': user.uid,
+        },
+      );
+      
+      return ErrorDisplayWidget(
+        message: 'Failed to load tab content',
+        location: 'HomeScreen',
+        type: ErrorType.unknown,
+        severity: ErrorSeverity.high,
+        onRetry: () {
+          setState(() {
+            _selectedIndex = 0; // Reset to inbox
+          });
+        },
+        onCancel: () {
+          setState(() {
+            _selectedIndex = 0; // Reset to inbox
+          });
+        },
+        error: e,
+        showDetails: true,
+        debugInfo: {
+          'selectedIndex': _selectedIndex,
+          'userRole': _userRole,
+          'userId': user.uid,
+        },
       );
     }
   }

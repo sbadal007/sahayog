@@ -1,7 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import '../models/rating.dart';
 import '../models/user_rating_summary.dart';
+import 'error_service.dart';
 
 class RatingService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -75,6 +77,21 @@ class RatingService {
       final snapshot = await query.get();
       return snapshot.docs.map((doc) => Rating.fromMap(doc.data() as Map<String, dynamic>, doc.id)).toList();
     } catch (e) {
+      ErrorService.logFirebaseError(
+        message: 'Error getting user ratings',
+        location: 'RatingService.getUserRatings',
+        error: e,
+        collection: 'ratings',
+        operation: 'get_user_ratings',
+      );
+
+      // If it's an index error, return empty list gracefully
+      final errorString = e.toString().toLowerCase();
+      if (errorString.contains('query requires an index') || errorString.contains('index is currently building')) {
+        debugPrint('RatingService: Index required for ratings query. Please create index for: collection(ratings) fields(revieweeId, isVisible, createdAt)');
+        return [];
+      }
+
       debugPrint('RatingService: Error getting user ratings: $e');
       return [];
     }
@@ -206,18 +223,48 @@ class RatingService {
 
   // Stream of ratings for a user (for real-time updates)
   static Stream<List<Rating>> getUserRatingsStream(String userId, {int? limit}) {
-    Query query = _firestore
-        .collection('ratings')
-        .where('revieweeId', isEqualTo: userId)
-        .where('isVisible', isEqualTo: true)
-        .orderBy('createdAt', descending: true);
+    try {
+      // Check if user is authenticated before creating stream
+      if (FirebaseAuth.instance.currentUser == null) {
+        return Stream.value([]); // Return empty stream if not authenticated
+      }
 
-    if (limit != null) {
-      query = query.limit(limit);
+      Query query = _firestore
+          .collection('ratings')
+          .where('revieweeId', isEqualTo: userId)
+          .where('isVisible', isEqualTo: true)
+          .orderBy('createdAt', descending: true);
+
+      if (limit != null) {
+        query = query.limit(limit);
+      }
+
+      return query.snapshots().map((snapshot) =>
+          snapshot.docs.map((doc) => Rating.fromMap(doc.data() as Map<String, dynamic>, doc.id)).toList())
+          .handleError((error) {
+        ErrorService.logFirebaseError(
+          message: 'Error in user ratings stream',
+          location: 'RatingService.getUserRatingsStream',
+          error: error,
+          collection: 'ratings',
+          operation: 'stream_user_ratings',
+        );
+        
+        // Return empty list on error
+        return <Rating>[];
+      });
+    } catch (e) {
+      ErrorService.logFirebaseError(
+        message: 'Error creating user ratings stream',
+        location: 'RatingService.getUserRatingsStream',
+        error: e,
+        collection: 'ratings',
+        operation: 'create_stream',
+      );
+      
+      // Return empty stream on error
+      return Stream.value(<Rating>[]);
     }
-
-    return query.snapshots().map((snapshot) =>
-        snapshot.docs.map((doc) => Rating.fromMap(doc.data() as Map<String, dynamic>, doc.id)).toList());
   }
 
   // Stream of user rating summary (for real-time updates)
