@@ -1,0 +1,163 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Users collection rules
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null; // Allow other users to read public profile info
+    }
+    
+    // Username mappings collection rules - FIXED for unauthenticated lookup
+    match /usernames/{username} {
+      allow read: if true; // Allow unauthenticated username lookup for sign-in
+      allow create: if request.auth != null; // Allow creating username mappings during signup
+      allow update, delete: if request.auth != null && resource.data.uid == request.auth.uid;
+    }
+    
+    // Notifications collection rules - NEW
+    match /notifications/{notificationId} {
+      allow read: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null; // Allow creating notifications
+      allow update: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow delete: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+    
+    // Requests collection rules - FIXED field names and list permission
+    match /requests/{requestId} {
+      allow read: if request.auth != null;
+      
+      // Allow list/query operations for authenticated users to find requests
+      allow list: if request.auth != null;
+      
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow update: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow delete: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+    
+    // Offers collection rules - FIXED with list permission
+    match /offers/{offerId} {
+      allow read: if request.auth != null && 
+        (request.auth.uid == resource.data.helperId || request.auth.uid == resource.data.requesterId);
+      
+      // Allow list/query operations for authenticated users to find their offers
+      allow list: if request.auth != null;
+      
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.helperId;
+      allow update: if request.auth != null && 
+        (request.auth.uid == resource.data.helperId || request.auth.uid == resource.data.requesterId);
+      allow delete: if request.auth != null && 
+        (request.auth.uid == resource.data.helperId || request.auth.uid == resource.data.requesterId);
+    }
+    
+    // Ratings collection rules - FIXED with list permission
+    match /ratings/{ratingId} {
+      // Allow reading all ratings for any authenticated user
+      allow read: if request.auth != null;
+      
+      // Allow list/query operations for authenticated users to find ratings
+      allow list: if request.auth != null;
+      
+      // Allow creating ratings only by the reviewer
+      allow create: if request.auth != null && 
+        request.auth.uid == request.resource.data.reviewerId &&
+        request.resource.data.reviewerId != request.resource.data.revieweeId; // Can't rate yourself
+      
+      // Allow updates and deletes by the reviewer
+      allow update, delete: if request.auth != null && 
+        request.auth.uid == resource.data.reviewerId;
+    }
+    
+    // User rating summaries collection rules - NEW
+    match /userRatingSummaries/{userId} {
+      // Allow reading your own summary and others' summaries
+      allow read: if request.auth != null;
+      
+      // Only allow system/service to write summaries (through server-side operations)
+      // For now, allow authenticated users to write (in production, use Cloud Functions)
+      allow write: if request.auth != null;
+    }
+    
+    // Conversations collection rules - IMPROVED
+    match /conversations/{conversationId} {
+      // Allow reading conversations if:
+      // 1. User is a participant, OR
+      // 2. Reading for existence check during conversation creation (by offerId)
+      allow read: if request.auth != null && 
+        (request.auth.uid in resource.data.participants);
+      
+      // Allow list/query operations for authenticated users (needed for offerId checks)
+      allow list: if request.auth != null;
+      
+      // Allow creating conversations if user is authenticated and is one of the participants
+      allow create: if request.auth != null && 
+        request.resource.data.participants is list &&
+        request.auth.uid in request.resource.data.participants &&
+        request.resource.data.participants.size() == 2; // Ensure exactly 2 participants
+      
+      // Allow updating conversations if user is a participant (for lastMessage, etc.)
+      allow update: if request.auth != null && 
+        (request.auth.uid in resource.data.participants);
+      
+      // Allow deleting conversations if user is a participant
+      allow delete: if request.auth != null && 
+        (request.auth.uid in resource.data.participants);
+    }
+    
+    // Archived conversations collection rules - FIXED with list permission
+    match /archived_conversations/{conversationId} {
+      // Allow reading archived conversations if user is a participant
+      allow read: if request.auth != null && 
+        (request.auth.uid in resource.data.participants);
+      
+      // Allow list/query operations for authenticated users to find their archived conversations
+      allow list: if request.auth != null;
+      
+      // Allow creating archived conversations if user is authenticated and is one of the participants
+      allow create: if request.auth != null && 
+        request.resource.data.participants is list &&
+        request.auth.uid in request.resource.data.participants;
+      
+      // Allow updating archived conversations if user is a participant
+      allow update: if request.auth != null && 
+        (request.auth.uid in resource.data.participants);
+      
+      // Allow deleting archived conversations if user is a participant
+      allow delete: if request.auth != null && 
+        (request.auth.uid in resource.data.participants);
+    }
+    
+    // Messages collection rules - IMPROVED
+    match /conversations/{conversationId}/messages/{messageId} {
+      // Allow reading messages if user is a participant in the conversation
+      allow read: if request.auth != null && 
+        request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
+      
+      // Allow creating messages if user is a participant and is the sender (or system message)
+      allow create: if request.auth != null && 
+        (request.resource.data.senderId == 'system' || 
+         (request.auth.uid == request.resource.data.senderId &&
+          request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants));
+      
+      // Allow updating own messages (for read status, etc.)
+      allow update: if request.auth != null && 
+        (request.auth.uid == resource.data.senderId ||
+         request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants);
+        
+      // Allow deleting own messages
+      allow delete: if request.auth != null && 
+        request.auth.uid == resource.data.senderId;
+    }
+    
+    // Typing indicators collection rules - NEW
+    match /conversations/{conversationId}/typing/{userId} {
+      // Allow reading typing indicators if user is a participant in the conversation
+      allow read: if request.auth != null && 
+        request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
+      
+      // Allow creating/updating typing indicators for yourself
+      allow write: if request.auth != null && 
+        request.auth.uid == userId &&
+        request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
+    }
+  }
+}

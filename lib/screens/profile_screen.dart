@@ -9,9 +9,13 @@ import 'package:provider/provider.dart';
 import 'dart:io' as io
     if (dart.library.html) 'dart:html';
 import '../services/user_status_service.dart';
+import '../services/rating_service.dart';
 import '../widgets/user_status_widget.dart';
 import '../widgets/user_avatar.dart';
+import '../widgets/rating_display_widget.dart';
+import '../widgets/firebase_storage_image.dart';
 import '../providers/user_provider.dart';
+import '../models/rating.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -220,7 +224,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (mounted) {
         final userProvider = Provider.of<UserProvider>(context, listen: false);
         userProvider.profileImageUrl = downloadUrl;
-        userProvider.notifyListeners();
+        // The provider will automatically notify listeners when the property is set
       }
 
       if (mounted) {
@@ -251,27 +255,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildProfileImage() {
     final profileImageUrl = _userData?['profileImageUrl'] as String?;
     
+    debugPrint('ProfileScreen: Building profile image with URL: $profileImageUrl');
+    
     return Stack(
       children: [
         CircleAvatar(
           radius: 60,
           backgroundColor: Colors.grey[300],
-          backgroundImage: profileImageUrl != null
-              ? NetworkImage(profileImageUrl)
-              : null,
-          child: profileImageUrl == null
-              ? Icon(
+          child: profileImageUrl != null && profileImageUrl.isNotEmpty
+              ? ClipOval(
+                  child: FirebaseStorageImage(
+                    imageUrl: profileImageUrl,
+                    width: 120,
+                    height: 120,
+                    fit: BoxFit.cover,
+                    errorWidget: Icon(
+                      Icons.person,
+                      size: 60,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                )
+              : Icon(
                   Icons.person,
                   size: 60,
                   color: Colors.grey[600],
-                )
-              : null,
+                ),
         ),
         if (_isUploading)
           Positioned.fill(
             child: Container(
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.5),
+                color: Colors.black.withValues(alpha: 0.5),
                 shape: BoxShape.circle,
               ),
               child: const Center(
@@ -415,6 +430,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   _buildProfileImage(),
                   const SizedBox(height: 24),
                   _buildUserInfo(),
+                  const SizedBox(height: 24),
+                  _buildRatingsSection(),
                   const SizedBox(height: 32),
                   Card(
                     child: Padding(
@@ -461,6 +478,321 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ],
               ),
             ),
+    );
+  }
+
+  Widget _buildRatingsSection() {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return const SizedBox.shrink();
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.star_rate, color: Colors.amber[700]),
+                const SizedBox(width: 8),
+                const Text(
+                  'My Ratings & Reviews',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            
+            // Rating Summary
+            StreamBuilder(
+              stream: RatingService.getUserRatingSummaryStream(currentUser.uid),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                
+                if (snapshot.hasError) {
+                  return Text(
+                    'Error loading ratings: ${snapshot.error}',
+                    style: const TextStyle(color: Colors.red),
+                  );
+                }
+                
+                final ratingSummary = snapshot.data;
+                if (ratingSummary == null) {
+                  return const Text('No ratings yet');
+                }
+                
+                return RatingDisplayWidget(
+                  ratingSummary: ratingSummary,
+                  showDetails: true,
+                );
+              },
+            ),
+            
+            const SizedBox(height: 16),
+            
+            // Recent Reviews
+            const Text(
+              'Recent Reviews',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 8),
+            
+            StreamBuilder<List<Rating>>(
+              stream: RatingService.getUserRatingsStream(currentUser.uid, limit: 3),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                
+                if (snapshot.hasError) {
+                  return Text(
+                    'Error loading reviews: ${snapshot.error}',
+                    style: const TextStyle(color: Colors.red),
+                  );
+                }
+                
+                final ratings = snapshot.data ?? [];
+                
+                if (ratings.isEmpty) {
+                  return Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Center(
+                      child: Text(
+                        'No reviews yet. Complete more requests to receive reviews!',
+                        style: TextStyle(color: Colors.grey),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  );
+                }
+                
+                return Column(
+                  children: ratings.map((rating) => _buildReviewCard(rating)).toList(),
+                );
+              },
+            ),
+            
+            if (currentUser.uid.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () => _showAllReviews(currentUser.uid),
+                child: const Text('View All Reviews'),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildReviewCard(Rating rating) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.grey.shade300),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  rating.reviewerName,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w500,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+              Row(
+                children: List.generate(5, (index) {
+                  return Icon(
+                    index < rating.rating ? Icons.star : Icons.star_border,
+                    size: 16,
+                    color: Colors.amber,
+                  );
+                }),
+              ),
+            ],
+          ),
+          if (rating.hasReviewText) ...[
+            const SizedBox(height: 4),
+            Text(
+              rating.review!,
+              style: TextStyle(
+                color: Colors.grey[700],
+                fontSize: 13,
+              ),
+            ),
+          ],
+          const SizedBox(height: 4),
+          Text(
+            _formatDate(rating.createdAt),
+            style: TextStyle(
+              color: Colors.grey[500],
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAllReviews(String userId) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => _AllReviewsScreen(userId: userId),
+      ),
+    );
+  }
+
+  String _formatDate(DateTime date) {
+    final now = DateTime.now();
+    final difference = now.difference(date);
+    
+    if (difference.inDays > 7) {
+      return '${date.day}/${date.month}/${date.year}';
+    } else if (difference.inDays > 0) {
+      return '${difference.inDays} day${difference.inDays > 1 ? 's' : ''} ago';
+    } else if (difference.inHours > 0) {
+      return '${difference.inHours} hour${difference.inHours > 1 ? 's' : ''} ago';
+    } else {
+      return 'Just now';
+    }
+  }
+}
+
+// Full reviews screen
+class _AllReviewsScreen extends StatelessWidget {
+  final String userId;
+
+  const _AllReviewsScreen({required this.userId});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('All Reviews'),
+        backgroundColor: Colors.blue,
+        foregroundColor: Colors.white,
+      ),
+      body: StreamBuilder<List<Rating>>(
+        stream: RatingService.getUserRatingsStream(userId),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          
+          if (snapshot.hasError) {
+            return Center(
+              child: Text('Error loading reviews: ${snapshot.error}'),
+            );
+          }
+          
+          final ratings = snapshot.data ?? [];
+          
+          if (ratings.isEmpty) {
+            return const Center(
+              child: Text('No reviews yet'),
+            );
+          }
+          
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: ratings.length,
+            itemBuilder: (context, index) {
+              final rating = ratings[index];
+              return Card(
+                margin: const EdgeInsets.only(bottom: 16),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  rating.reviewerName,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                Text(
+                                  rating.reviewType == 'helper_to_requester' 
+                                      ? 'As Helper' 
+                                      : 'As Requester',
+                                  style: TextStyle(
+                                    color: Colors.grey[600],
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Row(
+                                children: List.generate(5, (starIndex) {
+                                  return Icon(
+                                    starIndex < rating.rating ? Icons.star : Icons.star_border,
+                                    size: 20,
+                                    color: Colors.amber,
+                                  );
+                                }),
+                              ),
+                              Text(
+                                rating.formattedRating,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      if (rating.hasReviewText) ...[
+                        const SizedBox(height: 12),
+                        Text(rating.review!),
+                      ],
+                      const SizedBox(height: 8),
+                      Text(
+                        '${rating.createdAt.day}/${rating.createdAt.month}/${rating.createdAt.year}',
+                        style: TextStyle(
+                          color: Colors.grey[500],
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      ),
     );
   }
 }

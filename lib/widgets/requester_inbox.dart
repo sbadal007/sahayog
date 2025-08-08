@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../services/rating_service.dart';
+import '../services/chat_service.dart';
+import '../widgets/rating_dialog.dart';
 import '../widgets/user_status_widget.dart';
+import '../screens/chat_screen.dart';
 
 class RequesterInbox extends StatefulWidget {
   final String? userId;
@@ -75,12 +79,183 @@ class _RequesterInboxState extends State<RequesterInbox> with SingleTickerProvid
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Offer ${action}ed successfully!')),
         );
+
+        // Navigate to chat after accepting offer (similar to helper tab functionality)
+        if (action == 'accept') {
+          await _navigateToChat(offerId, requestId);
+        }
       }
     } catch (e) {
       debugPrint('Error handling offer: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to $action offer')),
+        );
+      }
+    }
+  }
+
+  Future<void> _navigateToChat(String offerId, String requestId) async {
+    try {
+      // Get offer details to find the helper
+      final offerDoc = await FirebaseFirestore.instance
+          .collection('offers')
+          .doc(offerId)
+          .get();
+      
+      if (!offerDoc.exists) {
+        debugPrint('RequesterInbox: Offer document not found: $offerId');
+        return;
+      }
+
+      final offerData = offerDoc.data()!;
+      final helperId = offerData['helperId'] as String;
+      final helperName = offerData['helperName'] as String? ?? 'Helper';
+      final requestId = offerData['requestId'] as String? ?? '';
+      final requesterId = currentUserId;
+
+      // Create or get conversation
+      final conversationId = await ChatService.createOrGetConversation(
+        offerId: offerId,
+        requesterId: requesterId,
+        helperId: helperId,
+        requestId: requestId.isEmpty ? null : requestId,
+      );
+
+      if (mounted) {
+        // Navigate to chat screen
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ChatScreen(
+              conversationId: conversationId,
+              otherParticipantName: helperName,
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('RequesterInbox: Error navigating to chat: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to open chat. Please try again.')),
+        );
+      }
+    }
+  }
+
+  // Keep this method for future rating implementation after chat functionality
+  // ignore: unused_element
+  Future<void> _showRatingDialog(String offerId, String requestId, String action) async {
+    try {
+      // Get offer details
+      final offerDoc = await FirebaseFirestore.instance.collection('offers').doc(offerId).get();
+      if (!offerDoc.exists) return;
+
+      final offerData = offerDoc.data()!;
+      final helperId = offerData['helperId'] as String;
+      final helperName = offerData['helperName'] as String;
+      final currentUserId = widget.userId ?? '';
+
+      // Get request details
+      final requestDoc = await FirebaseFirestore.instance.collection('requests').doc(requestId).get();
+      if (!requestDoc.exists) return;
+
+      final requestData = requestDoc.data()!;
+      final requestTitle = requestData['title'] as String? ?? 'Unknown Request';
+
+      // Check if user can rate (hasn't rated already)
+      final canRate = await RatingService.canUserRate(
+        requestId: requestId,
+        reviewerId: currentUserId,
+        revieweeId: helperId,
+      );
+
+      if (!canRate) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('You have already rated this helper')),
+          );
+        }
+        return;
+      }
+
+      if (!mounted) return;
+
+      // Show rating dialog
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext dialogContext) {
+          return RatingDialog(
+            requestTitle: requestTitle,
+            revieweeName: helperName,
+            reviewType: 'requester_to_helper',
+            onCancel: () {
+              Navigator.of(dialogContext).pop();
+            },
+            onSubmit: (double rating, String? review) async {
+              Navigator.of(dialogContext).pop();
+              await _submitRating(
+                offerId: offerId,
+                requestId: requestId,
+                revieweeId: helperId,
+                revieweeName: helperName,
+                rating: rating,
+                review: review,
+              );
+            },
+          );
+        },
+      );
+    } catch (e) {
+      debugPrint('Error showing rating dialog: $e');
+    }
+  }
+
+  Future<void> _submitRating({
+    required String offerId,
+    required String requestId,
+    required String revieweeId,
+    required String revieweeName,
+    required double rating,
+    String? review,
+  }) async {
+    try {
+      final currentUserId = widget.userId ?? '';
+      
+      // Get current user's name
+      final userDoc = await FirebaseFirestore.instance.collection('users').doc(currentUserId).get();
+      final userName = userDoc.data()?['username'] ?? 'Anonymous User';
+
+      await RatingService.createRating(
+        requestId: requestId,
+        offerId: offerId,
+        reviewerId: currentUserId,
+        revieweeId: revieweeId,
+        reviewerName: userName,
+        revieweeName: revieweeName,
+        rating: rating,
+        review: review,
+        reviewType: 'requester_to_helper',
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Rating submitted successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error submitting rating: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to submit rating: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
@@ -238,6 +413,8 @@ class _RequesterInboxState extends State<RequesterInbox> with SingleTickerProvid
           itemBuilder: (context, index) {
             final doc = docs[index];
             final offer = doc.data() as Map<String, dynamic>;
+            // Add the document ID to the offer data for chat functionality
+            offer['id'] = doc.id;
             return _buildOfferCard(doc.id, offer);
           },
         );
@@ -408,6 +585,71 @@ class _RequesterInboxState extends State<RequesterInbox> with SingleTickerProvid
                 return const Text('Loading request details...');
               },
             ),
+            // Show alternative price if proposed
+            if (offer['alternativePrice'] != null) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(8.0),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.orange.shade200),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.price_change, size: 18, color: Colors.orange.shade700),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Proposed Price: Rs. ${(offer['alternativePrice'] as num).toStringAsFixed(0)}',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w500,
+                          color: Colors.orange.shade800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            // Show custom message if provided
+            if (offer['customMessage'] != null && 
+                (offer['customMessage'] as String).isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(8.0),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blue.shade200),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.message, size: 18, color: Colors.blue.shade700),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Personal Message:',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w500,
+                            color: Colors.blue.shade800,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      offer['customMessage'] as String,
+                      style: TextStyle(
+                        color: Colors.blue.shade700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 12),
             Text('Offered on: ${createdAt.toString().split(' ')[0]}',
                 style: TextStyle(fontSize: 12, color: Colors.grey[500])),
@@ -433,6 +675,31 @@ class _RequesterInboxState extends State<RequesterInbox> with SingleTickerProvid
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () => _openChat(offer),
+                  icon: const Icon(Icons.chat_bubble_outline),
+                  label: const Text('Chat with Helper'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue[100],
+                    foregroundColor: Colors.blue[800],
+                  ),
+                ),
+              ),
+            ],
+            if (status == 'accepted') ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () => _openChat(offer),
+                  icon: const Icon(Icons.chat),
+                  label: const Text('Chat with Helper'),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
+                ),
               ),
             ],
             if (_showDebugInfo) ...[
@@ -605,6 +872,54 @@ class _RequesterInboxState extends State<RequesterInbox> with SingleTickerProvid
             ],
           ),
         );
+    }
+  }
+
+  Future<void> _openChat(Map<String, dynamic> offer) async {
+    try {
+      final offerId = offer['id'] ?? '';
+      final helperId = offer['helperId'] ?? '';
+      final helperName = offer['helperName'] ?? 'Helper';
+      final requestId = offer['requestId'] ?? '';
+      
+      if (offerId.isEmpty || helperId.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Cannot open chat: Invalid offer data'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      // Create or get conversation
+      final conversationId = await ChatService.createOrGetConversation(
+        offerId: offerId,
+        requesterId: currentUserId,
+        helperId: helperId,
+        requestId: requestId.isEmpty ? null : requestId,
+      );
+
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ChatScreen(
+              conversationId: conversationId,
+              otherParticipantName: helperName,
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to open chat: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 

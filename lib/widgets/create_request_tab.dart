@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geolocator/geolocator.dart';
+import 'dart:async';
 
 class CreateRequestTab extends StatefulWidget {
   const CreateRequestTab({super.key});
@@ -22,6 +23,7 @@ class _CreateRequestTabState extends State<CreateRequestTab> {
   int _pendingRequestCount = 0;
   late String currentUserId;
   String? currentUsername;
+  StreamSubscription<QuerySnapshot>? _requestsSubscription;
 
   @override
   void initState() {
@@ -69,7 +71,7 @@ class _CreateRequestTabState extends State<CreateRequestTab> {
   }
 
   void _listenToPendingRequests() {
-    FirebaseFirestore.instance
+    _requestsSubscription = FirebaseFirestore.instance
         .collection('requests')
         .where('userId', isEqualTo: currentUserId) // Use actual user ID
         .where('status', isEqualTo: 'open')
@@ -103,13 +105,25 @@ class _CreateRequestTabState extends State<CreateRequestTab> {
     try {
       debugPrint('CreateRequestTab: Creating request for userId: $currentUserId, username: $currentUsername');
       
+      // Validate price input
+      final priceText = _priceController.text.trim();
+      final price = double.tryParse(priceText);
+      if (price == null || price <= 0) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Please enter a valid price')),
+          );
+        }
+        return;
+      }
+      
       await FirebaseFirestore.instance.collection('requests').add({
         'userId': currentUserId,
         'username': currentUsername ?? 'Unknown User', // Add username to request
-        'title': _titleController.text,
-        'description': _descriptionController.text,
-        'price': double.parse(_priceController.text),
-        'location': _locationController.text,
+        'title': _titleController.text.trim(),
+        'description': _descriptionController.text.trim(),
+        'price': price,
+        'location': _locationController.text.trim(),
         'preferredDate': Timestamp.fromDate(_preferredDate!),
         'createdAt': Timestamp.now(),
         'latitude': _currentPosition!.latitude,
@@ -268,6 +282,7 @@ class _CreateRequestTabState extends State<CreateRequestTab> {
 
   @override
   void dispose() {
+    _requestsSubscription?.cancel();
     _titleController.dispose();
     _descriptionController.dispose();
     _priceController.dispose();
